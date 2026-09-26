@@ -23,7 +23,7 @@ create index if not exists dives_player_idx on public.dives (player_id, created_
 alter table public.dives enable row level security;
 revoke all on table public.dives from anon, authenticated;
 
--- Every wave is 400 ft. These limits are generous on purpose: they only catch numbers
+-- Every wave is 120 meters. These limits are generous on purpose: they only catch numbers
 -- the game cannot produce, not good players.
 create or replace function public.submit_dive(
   p_player   uuid,
@@ -48,10 +48,10 @@ begin
     raise exception 'The name has to be between 1 and 16 characters.';
   end if;
 
-  if p_depth is null or p_depth < 400 or p_depth % 400 <> 0 or p_depth > 400000 then
+  if p_depth is null or p_depth < 120 or p_depth % 120 <> 0 or p_depth > 120000 then
     raise exception 'That depth is not one the game can reach.';
   end if;
-  v_waves := p_depth / 400;
+  v_waves := p_depth / 120;
 
   if p_duration is null or p_duration < v_waves * 8 then
     raise exception 'That dive was faster than the water allows.';

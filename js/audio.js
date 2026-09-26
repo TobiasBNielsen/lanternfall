@@ -240,7 +240,7 @@ const Sound = (() => {
   //   long low glides in the deep water, like something very large far away,
   //   and in a fight, a slow heartbeat that thickens as the water fills up.
   // Modes: 'calm' (title page, supplies), 'normal' (a dive), 'boss'.
-  const ZONE_ROOTS = [[0, 38], [800, 36], [2400, 33], [5000, 29], [9000, 26]];
+  const ZONE_ROOTS = [[0, 38], [240, 36], [720, 33], [1500, 29], [2700, 26]];
   const SCALE = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24];
 
   const Music = {
@@ -310,11 +310,11 @@ const Sound = (() => {
 
     setDepth(d, force) {
       // called every frame; only act when the depth has actually moved
-      if (!force && Math.abs(d - this.depth) < 25) return;
+      if (!force && Math.abs(d - this.depth) < 8) return;
       this.depth = d;
       let root = ZONE_ROOTS[0][1];
       for (const [from, r] of ZONE_ROOTS) if (d >= from) root = r;
-      if (this.surf) this.surf.gain.setTargetAtTime(0.035 * Math.max(0, 1 - d / 1800), ctx.currentTime, 1.5);
+      if (this.surf) this.surf.gain.setTargetAtTime(0.035 * Math.max(0, 1 - d / 540), ctx.currentTime, 1.5);
       if (root !== this.root || force) { this.root = root; this.retune(); }
     },
 
@@ -381,7 +381,7 @@ const Sound = (() => {
           continue;
         }
         const n = this.motif[this.motifPos++];
-        const octave = this.mode === 'boss' ? 36 : 36 + (this.depth > 5000 ? -12 : 0);
+        const octave = this.mode === 'boss' ? 36 : 36 + (this.depth > 1500 ? -12 : 0);
         const vol = this.mode === 'calm' ? 0.05 : 0.065;
         this.bell(this.nextNote, this.root + octave + SCALE[n.step] + (this.mode === 'boss' && n.step % 3 === 1 ? 1 : 0), vol);
         const unit = this.mode === 'calm' ? 0.62 : this.mode === 'boss' ? 0.4 : 0.5;
@@ -405,7 +405,7 @@ const Sound = (() => {
       }
 
       // far below: something very large calling now and then
-      if (this.depth >= 2400 && now > this.nextGlide) {
+      if (this.depth >= 720 && now > this.nextGlide) {
         this.nextGlide = now + rand(12, 26);
         const f = rand(150, 220);
         tone({ at: now + 0.1, type: 'sine', f, f2: f * rand(0.55, 0.7), dur: 3.4, vol: 0.05, attack: 1.1, bus: this.echo });
@@ -428,7 +428,7 @@ const Sound = (() => {
   function setDepth(d) {
     if (!water) return;
     Music.setDepth(d);
-    const f = Math.round(lerp(5000, 1100, clamp(d / 8000, 0, 1)) / 50) * 50;
+    const f = Math.round(lerp(5000, 1100, clamp(d / 2400, 0, 1)) / 50) * 50;
     if (f !== waterF) { waterF = f; water.frequency.setTargetAtTime(f, ctx.currentTime, 0.6); }
   }
 

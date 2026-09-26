@@ -162,7 +162,7 @@ b { font-weight: 700; }
 .board-list li { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 14px; align-items: baseline; padding: 5px 0; border-bottom: 1px dotted var(--paper-faint); }
 .board-list .n { color: var(--paper-dim); }
 .board-list .who { font-family: var(--fell); font-style: italic; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-list .ft { color: var(--paper-dim); text-align: right; }
+.board-list .dep { color: var(--paper-dim); text-align: right; }
 .board-list .pts { text-align: right; min-width: 64px; }
 .board-list li.me .who, .board-list li.me .pts { color: var(--amber); }
 .board-list li.board-note { display: block; color: var(--paper-dim); border: 0; }

@@ -1,12 +1,12 @@
 'use strict';
 
-// Depth is in feet, like the 1934 dives. Each zone is a deeper exposure of the same blue.
+// Depth is in meters. Each zone is a deeper exposure of the same blue.
 const ZONES = [
   { from: 0, name: 'sunlit water', top: '#3569b3', bot: '#23518f', rays: 1 },
-  { from: 800, name: 'the twilight', top: '#23518f', bot: '#183b73', rays: 0.4 },
-  { from: 2400, name: 'the midnight water', top: '#14305f', bot: '#0d2148', rays: 0.08 },
-  { from: 5000, name: 'the abyss', top: '#0c1c40', bot: '#08132d', rays: 0 },
-  { from: 9000, name: 'the trench', top: '#070f25', bot: '#040918', rays: 0 },
+  { from: 240, name: 'the twilight', top: '#23518f', bot: '#183b73', rays: 0.4 },
+  { from: 720, name: 'the midnight water', top: '#14305f', bot: '#0d2148', rays: 0.08 },
+  { from: 1500, name: 'the abyss', top: '#0c1c40', bot: '#08132d', rays: 0 },
+  { from: 2700, name: 'the trench', top: '#070f25', bot: '#040918', rays: 0 },
 ];
 
 function zoneAt(depth) {
@@ -123,7 +123,7 @@ const Background = {
   },
 
   // 0 in the upper water, up to ~0.85 in the trench
-  darkness() { return clamp((this.shown - 1600) / 6000, 0, 0.85); },
+  darkness() { return clamp((this.shown - 480) / 1800, 0, 0.85); },
 
   colors() {
     const d = this.shown;

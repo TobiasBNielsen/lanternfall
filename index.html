@@ -21,7 +21,7 @@
   <div id="hud" class="hidden">
     <div class="hud-top">
       <p class="hud-score"><span id="score">0</span> points</p>
-      <p class="hud-depth" id="depthLabel">400 ft</p>
+      <p class="hud-depth" id="depthLabel">120 m</p>
       <div class="hud-right">
         <p class="hud-stock">
           <span class="stock-item" title="Hull plates">hull <span id="hull" class="marks hull"></span></span>
@@ -63,7 +63,7 @@
       <header class="masthead">
         <p class="overline">Notes from a descent, 1934</p>
         <h1 class="logo">Lanternfall</h1>
-        <p class="lede">The ship lowers us at noon. Below six hundred feet the sunlight gives out, and after that the only light is whatever the animals make themselves. We have a harpoon, a lamp, and one tank of air.</p>
+        <p class="lede">The ship lowers us at noon. Below two hundred meters the sunlight gives out, and after that the only light is whatever the animals make themselves. We have a harpoon, a lamp, and one tank of air.</p>
         <p class="record" id="record">No dives in the log yet.</p>
         <button id="playBtn" class="begin">Begin the descent <span aria-hidden="true">&darr;</span></button>
       </header>
@@ -106,7 +106,7 @@
   <!-- Pause -->
   <div id="pause" class="screen hidden">
     <div class="sheet">
-      <h2>Holding at <span id="pauseDepth">0</span> ft</h2>
+      <h2>Holding at <span id="pauseDepth">0</span> m</h2>
       <p class="prose">The winch is stopped. Nothing out there is moving either.</p>
       <div class="actions">
         <button id="resumeBtn" class="begin small">Carry on</button>
@@ -123,7 +123,7 @@
   <!-- Supplies lowered from the ship between waves -->
   <div id="dock" class="screen hidden">
     <div class="sheet dock-sheet">
-      <p class="overline">Stopped at <span id="dockDepth">400</span> ft. The ship has topped up the air.</p>
+      <p class="overline">Stopped at <span id="dockDepth">120</span> m. The ship has topped up the air.</p>
       <h2>Supplies from the ship</h2>
       <p class="purse-line">In the basket: <i class="pearl"></i><b id="dockPearls">0</b> pearls</p>
       <div id="dockItems" class="shop"></div>
@@ -135,7 +135,7 @@
   <div id="gameover" class="screen hidden">
     <div class="sheet last-entry">
       <p class="overline">Last entry</p>
-      <h2>The line went quiet at <span id="goDepth">0</span> ft.</h2>
+      <h2>The line went quiet at <span id="goDepth">0</span> m.</h2>
       <p class="prose">That is <span id="goZone">sunlit water</span>. Before the telephone cut out we had taken <b id="goKills">0</b> of them and brought up <b id="goPearls">0</b> pearls. The field book has <b id="goSpecies">0 of 12</b> species in it.</p>
       <p class="score-line">Score for the dive: <b id="goScore">0</b></p>
       <p class="prose small" id="goBest"></p>

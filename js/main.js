@@ -17,7 +17,7 @@ function frame(now) {
   if (state !== 'paused') Background.update(dt, sinking);
   Sound.setDepth(Background.shown);
   Sound.Music.setIntensity(G && state === 'playing' ? G.enemies.length : 0);
-  if (G && state === 'playing' && G.depth >= 1600) {
+  if (G && state === 'playing' && G.depth >= 480) {
     G.creakT -= dt;
     if (G.creakT <= 0) { G.creakT = rand(7, 15); Sound.sfx.creak(); }
   }

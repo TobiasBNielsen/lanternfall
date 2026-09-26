@@ -510,11 +510,11 @@ function drawBanner() {
   const t = G.waveT, dur = 2.4;
   if (G.waveState === 'intro') {
     title = G.waveDef.title;
-    kicker = `${G.depth.toLocaleString('en-US')} ft, ${zoneAt(G.depth).name}`;
+    kicker = `${G.depth.toLocaleString('en-US')} m, ${zoneAt(G.depth).name}`;
     note = G.waveDef.note;
   } else if (G.waveState === 'clear' && G.gameOverT <= 0) {
     title = 'Clear water';
-    kicker = `${G.depth.toLocaleString('en-US')} ft`;
+    kicker = `${G.depth.toLocaleString('en-US')} m`;
     note = `${G.clearBonus.toLocaleString('en-US')} points for the log.`;
   }
   if (!title) return;

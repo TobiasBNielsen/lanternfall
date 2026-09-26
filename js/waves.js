@@ -1,6 +1,6 @@
 'use strict';
 
-const DEPTH_PER_WAVE = 400; // feet
+const DEPTH_PER_WAVE = 120; // meters
 
 // Sixteen dives to a cycle; every fourth ends with something large. After that the cycle repeats, harder.
 const WAVES = [
@@ -17,7 +17,7 @@ const WAVES = [
   { type: 'mix', title: 'Open mouths', note: 'Three gulpers, waiting. The water pulls toward them.',
     parts: [{ type: 'gulpers', count: 3 }, { type: 'bloom', clusters: 3, per: 4, kinds: ['jellyB'] }] },
   { type: 'pyro', title: 'Fire-tubes', note: 'Tubes of light that break into smaller tubes of light.', count: 5 },
-  { type: 'colony', title: 'The Colony', note: 'Forty feet of bells, all joined, all coming.', bells: 12 },
+  { type: 'colony', title: 'The Colony', note: 'Twelve meters of bells, all joined, all coming.', bells: 12 },
   { type: 'current', title: 'Midnight shoal', note: 'The lamp-horns again, with bells trailing behind.', groups: 5, per: 8, kinds: ['angler', 'angler', 'jellyB'] },
   { type: 'mix', title: 'Chains and mouths', note: 'The bells again. The gulpers do not mind them.',
     parts: [{ type: 'chains', chains: 3, len: 8 }, { type: 'gulpers', count: 2 }] },

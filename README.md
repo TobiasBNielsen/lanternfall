@@ -6,7 +6,7 @@ Notes from a descent. A deep-sea shooter for the browser, drawn like a 1930s cya
 
 ## How it plays
 
-- **Every wave is 400 ft deeper.** The blue deepens from sunlit water through the twilight and the midnight water down to the abyss and the trench. Down there you only see what glows: your lamp, the lamp-horns' lights, the spores they spit.
+- **Every wave is 120 meters deeper.** The blue deepens from sunlit water through the twilight and the midnight water down to the abyss and the trench. Down there you only see what glows: your lamp, the lamp-horns' lights, the spores they spit.
 - **Air runs out.** Your air drains during a fight. Catch the bubbles rising from the vents below, or lose a hull plate.
 - **Pearls pay for supplies.** Between waves the ship above lowers a basket: grade your weapon up, swap to one of two other weapons it has room for, add a hull plate or buy sonar charges.
 - **Six weapons:** harpoon, sonar ring, bubble gun, flare gun (sticks, lights up the dark, then bursts), net (tangles and slows everything it opens on) and galvanic coil (a spark that jumps from creature to creature).
@@ -15,7 +15,7 @@ Notes from a descent. A deep-sea shooter for the browser, drawn like a 1930s cya
 - **Something large every fourth wave,** each with its own rule:
   - *Grandmother Inkwell* and *The Old One*, krakens whose heads are armoured until every arm is shot off.
   - *The Lantern Queen*, who puts out every light but her own. Her body stops your shots; only her lamp can be hurt.
-  - *The Colony*, forty feet of bells behind a float. Only the last bell can be cut, and the float waits for the end.
+  - *The Colony*, twelve meters of bells behind a float. Only the last bell can be cut, and the float waits for the end.
 - **Sixteen waves to a cycle** with ten kinds of creature, among them chain colonies that come apart bell by bell, silver hatchets that cross in pairs, gulpers that drag the sphere toward their open mouths (and can only be hurt while open), and fire-tubes that break into three.
 - **The field book.** The first time you take a new species it goes in the book as a plate, with its name and a line of notes. Twelve to find.
 - **The deepest dives.** Sign the log when a dive ends and your best score goes on the shared leaderboard on the title page.

@@ -29,7 +29,7 @@ function setHud(key, val, fn) {
 
 function updateHud() {
   setHud('score', G.score, v => { hud.score.textContent = v.toLocaleString('en-US'); });
-  setHud('depth', G.depth, v => { hud.depth.textContent = v.toLocaleString('en-US') + ' ft'; });
+  setHud('depth', G.depth, v => { hud.depth.textContent = v.toLocaleString('en-US') + ' m'; });
   setHud('hull', G.hull, v => tally(hud.hull, v));
   setHud('sonar', G.sonar, v => { tally(hud.sonar, v); $('sonarCount').textContent = v; });
   setHud('pearls', G.pearls, v => { hud.pearls.textContent = v; });
@@ -49,10 +49,21 @@ function showScreen(id) {
   document.body.classList.toggle('hide-cursor', state === 'playing' && Input.mode === 'mouse');
 }
 
-function refreshBest() {
+// Best dives saved before depth was measured in meters were stored in feet; convert them once.
+function loadBest() {
   const best = Store.get('lf_best', { score: 0, depth: 0 });
+  if (!best.meters) {
+    best.depth = Math.round(best.depth * 0.3);
+    best.meters = true;
+    Store.set('lf_best', best);
+  }
+  return best;
+}
+
+function refreshBest() {
+  const best = loadBest();
   $('record').textContent = best.score > 0
-    ? `Deepest so far: ${best.depth.toLocaleString('en-US')} ft, with ${best.score.toLocaleString('en-US')} points.`
+    ? `Deepest so far: ${best.depth.toLocaleString('en-US')} m, with ${best.score.toLocaleString('en-US')} points.`
     : 'No dives in the log yet.';
   renderPlates();
   renderBoard();
@@ -99,9 +110,10 @@ function toMenu() {
 
 function gameOver() {
   state = 'gameover';
-  const best = Store.get('lf_best', { score: 0, depth: 0 });
+  clearHints();
+  const best = loadBest();
   const record = G.score > best.score;
-  Store.set('lf_best', { score: Math.max(best.score, G.score), depth: Math.max(best.depth, G.depth) });
+  Store.set('lf_best', { score: Math.max(best.score, G.score), depth: Math.max(best.depth, G.depth), meters: true });
   $('goDepth').textContent = G.depth.toLocaleString('en-US');
   $('goZone').textContent = zoneAt(G.depth).name;
   $('goKills').textContent = G.kills.toLocaleString('en-US');
@@ -234,10 +246,10 @@ async function renderBoard() {
     rows.forEach((r, i) => {
       const li = document.createElement('li');
       if (mine && r.name === mine) li.className = 'me';
-      li.innerHTML = '<span class="n"></span><span class="who"></span><span class="ft"></span><span class="pts"></span>';
+      li.innerHTML = '<span class="n"></span><span class="who"></span><span class="dep"></span><span class="pts"></span>';
       li.querySelector('.n').textContent = i + 1 + '.';
       li.querySelector('.who').textContent = r.name;
-      li.querySelector('.ft').textContent = r.depth.toLocaleString('en-US') + ' ft';
+      li.querySelector('.dep').textContent = r.depth.toLocaleString('en-US') + ' m';
       li.querySelector('.pts').textContent = r.score.toLocaleString('en-US');
       list.appendChild(li);
     });
@@ -371,7 +383,7 @@ function logSpecies(kind) {
   const sp = SPECIES[kind];
   const toast = $('plateToast');
   $('toastLatin').textContent = sp.latin;
-  $('toastCommon').textContent = `${sp.common}, logged at ${G.depth.toLocaleString('en-US')} ft`;
+  $('toastCommon').textContent = `${sp.common}, logged at ${G.depth.toLocaleString('en-US')} m`;
   $('toastNote').textContent = sp.note;
   toast.classList.remove('hidden');
   drawSpecimen($('toastCanvas'), kind, true);

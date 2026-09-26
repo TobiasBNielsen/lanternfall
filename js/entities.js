@@ -30,7 +30,7 @@ const SPECIES = {
   gulper: { latin: 'Saccognathus vorax', common: 'gulper', note: 'Mostly mouth. When it opens, the water goes in and we go with it. Shoot while it is open.' },
   pyro: { latin: 'Pyrosoma lucerna', common: 'fire-tube', note: 'A tube of little lights. Break it and every piece carries on by itself.' },
   queen: { latin: 'Lychnoceras regina', common: 'the lantern queen', note: 'She puts out every light but her own. Aim for the lamp, not the jaws.' },
-  colony: { latin: 'Physophora gigantea', common: 'the colony', note: 'Forty feet of it. Only the last bell can be cut, and the float waits for the end.' },
+  colony: { latin: 'Physophora gigantea', common: 'the colony', note: 'Twelve meters of it. Only the last bell can be cut, and the float waits for the end.' },
 };
 
 // Where a thing can be hit. Most things are hit where they are; a few keep their weak spot elsewhere.
