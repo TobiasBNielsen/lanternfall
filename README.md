@@ -50,15 +50,21 @@ Then open http://localhost:8000.
 ## Project structure
 
 ```
-index.html        Title page, HUD, supplies and field book
-css/style.css     Styling
-js/util.js        Math helpers, storage, viewport
-js/audio.js       Synthesized sound effects and music
-js/sprites.js     Procedural linework, hatching and stippling
-js/background.js  Water column, cyanotype texture, depth zones
-js/entities.js    Sphere, weapons, creatures, species notes, pickups
-js/waves.js       Wave definitions, movement patterns and the kraken
-js/game.js        Game loop, input, rendering, supplies, field book, UI
-js/leaderboard.js Talks to the shared log of deepest dives
-supabase/schema.sql  The leaderboard table and the two functions that guard it
+index.html           Title page, HUD, supplies and field book
+css/style.css        Styling
+js/util.js           Math helpers, storage, viewport
+js/audio.js          Synthesized sound and music
+js/sprites.js        Procedural linework, hatching and stippling
+js/background.js     Water column, cyanotype texture, depth zones
+js/entities.js       Creatures, species notes, damage, pickups, particles
+js/weapons.js        The six weapons and how their shots behave
+js/waves.js          Wave definitions and movement patterns
+js/bosses.js         The krakens, the lantern queen and the colony
+js/leaderboard.js    Talks to the shared log of deepest dives
+js/core.js           Game state and one step of the simulation
+js/input.js          Mouse, keyboard and touch
+js/render.js         Everything drawn on the canvas
+js/ui.js             HUD, screens, supplies, field book, leaderboard UI
+js/main.js           Frame loop and start-up
+supabase/schema.sql  The leaderboard table and the functions that guard it
 ```
