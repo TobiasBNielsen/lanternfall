@@ -27,7 +27,9 @@ const Background = {
   shown: 0, // eased depth used for colours
   sink: 0,
   t: 0,
-  vignette: null,
+  grad: null,
+  gradKey: null,
+  rayGrad: null,
   print: null, // the uneven exposure of a hand-coated cyanotype sheet
 
   init() {
@@ -135,10 +137,15 @@ const Background = {
   draw(ctx) {
     const { W, H } = View;
     const c = this.colors();
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, c.top);
-    g.addColorStop(1, c.bot);
-    ctx.fillStyle = g;
+    // the water colour only changes between waves, so the gradient is rebuilt only then
+    const key = c.top + c.bot + H;
+    if (key !== this.gradKey) {
+      this.gradKey = key;
+      this.grad = ctx.createLinearGradient(0, 0, 0, H);
+      this.grad.addColorStop(0, c.top);
+      this.grad.addColorStop(1, c.bot);
+    }
+    ctx.fillStyle = this.grad;
     ctx.fillRect(0, 0, W, H);
 
     // pale shafts where the sunlight still gets through
@@ -146,16 +153,14 @@ const Background = {
       for (let i = 0; i < 4; i++) {
         const cx = W * (0.12 + i * 0.26) + Math.sin(this.t * 0.2 + i * 1.7) * 50;
         const w = 50 + (i % 3) * 36;
-        const a = (0.05 + 0.02 * Math.sin(this.t * 0.6 + i)) * c.rays;
-        const rg = ctx.createLinearGradient(0, 0, 0, H * 0.85);
-        rg.addColorStop(0, `rgba(232,238,230,${a})`);
-        rg.addColorStop(1, 'rgba(232,238,230,0)');
-        ctx.fillStyle = rg;
+        ctx.globalAlpha = (0.05 + 0.02 * Math.sin(this.t * 0.6 + i)) * c.rays;
+        ctx.fillStyle = this.rayGrad;
         ctx.beginPath();
         ctx.moveTo(cx - w * 0.3, 0); ctx.lineTo(cx + w * 0.3, 0);
         ctx.lineTo(cx + w * 1.3 + 110, H * 0.85); ctx.lineTo(cx - w * 0.2 + 110, H * 0.85);
         ctx.closePath(); ctx.fill();
       }
+      ctx.globalAlpha = 1;
     }
 
     for (const p of this.spires) {
@@ -181,11 +186,21 @@ const Background = {
     if (this.print) ctx.drawImage(this.print, 0, 0, W, H);
   },
 
+  // Static per resize: the ray gradient, and the vignette baked into the print texture
+  // so the whole screen is only composited once for both.
   buildOverlays(ctx) {
     const { W, H } = View;
-    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75);
+    this.rayGrad = ctx.createLinearGradient(0, 0, 0, H * 0.85);
+    this.rayGrad.addColorStop(0, 'rgba(232,238,230,1)');
+    this.rayGrad.addColorStop(1, 'rgba(232,238,230,0)');
+    this.gradKey = null;
+    if (!this.print) return;
+    const x = this.print.getContext('2d');
+    x.setTransform(0.5, 0, 0, 0.5, 0, 0);
+    const v = x.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75);
     v.addColorStop(0, 'rgba(0,0,0,0)');
     v.addColorStop(1, 'rgba(3,9,26,0.45)');
-    this.vignette = v;
+    x.fillStyle = v;
+    x.fillRect(0, 0, W, H);
   },
 };

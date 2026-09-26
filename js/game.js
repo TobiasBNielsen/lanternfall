@@ -11,6 +11,7 @@ let menuSchool = [];
 const darkCanvas = makeCanvas(1, 1);
 const darkCtx = darkCanvas.getContext('2d');
 const DARK_RES = 0.25;
+let darkTick = false;
 
 // ---------------------------------------------------------------- setup
 
@@ -133,9 +134,9 @@ function update(dt) {
   for (let i = 0; i < timers.length; i++) {
     const tm = timers[i];
     tm.t -= dt;
-    if (tm.t <= 0 && !tm.done) { tm.done = true; tm.fn(); }
+    if (tm.t <= 0 && !tm.dead) { tm.dead = true; tm.fn(); }
   }
-  G.timers = G.timers.filter(t => !t.done);
+  compact(G.timers);
 
   updateWaveFlow(dt);
   updatePlayer(dt);
@@ -397,6 +398,8 @@ function updateParticles(dt) {
 
 // ---------------------------------------------------------------- render
 
+let shakeX = 0, shakeY = 0;
+
 function render() {
   const k = View.scale * View.dpr;
   const W = View.W, H = View.H;
@@ -408,28 +411,28 @@ function render() {
   if (state === 'menu') {
     drawMenuSchool();
   } else if (G) {
-    ctx.save();
-    if (G.shake > 0) ctx.translate(rand(-G.shake, G.shake) * 0.5, rand(-G.shake, G.shake) * 0.5);
+    // one shake offset per frame, shared by both passes
+    shakeX = G.shake > 0 ? rand(-G.shake, G.shake) * 0.5 : 0;
+    shakeY = G.shake > 0 ? rand(-G.shake, G.shake) * 0.5 : 0;
+    ctx.setTransform(k, 0, 0, k, k * shakeX, k * shakeY);
     drawPickups();
     drawEnemies();
     drawShots();
-    drawBullets();
     drawPlayer();
     drawBuoy();
     drawParticles('normal');
-    ctx.restore();
+    ctx.setTransform(k, 0, 0, k, 0, 0);
     drawDarkness();
-    ctx.save();
-    if (G.shake > 0) ctx.translate(rand(-G.shake, G.shake) * 0.5, rand(-G.shake, G.shake) * 0.5);
+    ctx.setTransform(k, 0, 0, k, k * shakeX, k * shakeY);
+    // the sphere's shots are amber light, so they sit above the dark and need no hole cut for them
+    drawBullets();
     drawParticles('add');
     drawTexts();
-    ctx.restore();
+    ctx.setTransform(k, 0, 0, k, 0, 0);
     drawBossBar();
     drawBanner();
   }
 
-  ctx.fillStyle = Background.vignette;
-  ctx.fillRect(0, 0, W, H);
   if (G && G.flash > 0 && state !== 'menu') {
     ctx.fillStyle = `rgba(232,238,230,${Math.min(1, G.flash)})`;
     ctx.fillRect(0, 0, W, H);
@@ -440,7 +443,11 @@ function render() {
 function drawDarkness() {
   const d = Background.darkness();
   if (d <= 0.01) return;
-  const dc = darkCtx, W = View.W, H = View.H;
+  const W = View.W, H = View.H;
+  // the light mask only needs refreshing every other frame; nobody can see a 16 ms lag in a shadow
+  darkTick = !darkTick;
+  if (darkTick && state === 'playing') { ctx.drawImage(darkCanvas, 0, 0, W, H); return; }
+  const dc = darkCtx;
   dc.setTransform(DARK_RES, 0, 0, DARK_RES, 0, 0);
   dc.globalCompositeOperation = 'source-over';
   dc.clearRect(0, 0, W, H);
@@ -464,7 +471,6 @@ function drawDarkness() {
   for (const s of G.shots) hole(s.x, s.y, 70, 1);
   for (const pk of G.pickups) hole(pk.x, pk.y, 80, 0.9);
   if (G.buoy) hole(G.buoy.x, G.buoy.y, 160, 1);
-  for (const b of G.bullets) if (b.kind !== 'bubble') hole(b.x, b.y, 50, 0.6);
   dc.globalAlpha = 1;
   ctx.drawImage(darkCanvas, 0, 0, W, H);
 }
@@ -639,9 +645,23 @@ function drawShots() {
   }
 }
 
+// Hundreds of these a second: skip save/restore and set the transform directly.
 function drawBullets() {
-  for (const b of G.bullets) drawSprite(ctx, Sprites.bullet[b.kind], b.x, b.y, b.ang);
+  const k = View.scale * View.dpr, ox = k * shakeX, oy = k * shakeY;
+  for (const b of G.bullets) {
+    const sp = Sprites.bullet[b.kind];
+    if (b.kind === 'bubble' || Math.abs(b.ang) < 0.02) {
+      ctx.drawImage(sp.c, b.x - sp.w / 2, b.y - sp.h / 2, sp.w, sp.h);
+    } else {
+      const c = Math.cos(b.ang) * k, s = Math.sin(b.ang) * k;
+      ctx.setTransform(c, s, -s, c, k * b.x + ox, k * b.y + oy);
+      ctx.drawImage(sp.c, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+      ctx.setTransform(k, 0, 0, k, ox, oy);
+    }
+  }
 }
+
+let lampCone = null;
 
 function drawPlayer() {
   const p = G.player;
@@ -652,10 +672,12 @@ function drawPlayer() {
   ctx.translate(p.x, p.y + Math.sin(G.time * 2.1) * 1.6);
 
   ctx.globalCompositeOperation = 'lighter';
-  const cone = ctx.createLinearGradient(0, -30, 0, -260);
-  cone.addColorStop(0, 'rgba(242,169,59,0.16)');
-  cone.addColorStop(1, 'rgba(242,169,59,0)');
-  ctx.fillStyle = cone;
+  if (!lampCone) {
+    lampCone = ctx.createLinearGradient(0, -30, 0, -260);
+    lampCone.addColorStop(0, 'rgba(242,169,59,0.16)');
+    lampCone.addColorStop(1, 'rgba(242,169,59,0)');
+  }
+  ctx.fillStyle = lampCone;
   ctx.beginPath(); ctx.moveTo(-5, -30); ctx.lineTo(5, -30); ctx.lineTo(75, -260); ctx.lineTo(-75, -260); ctx.closePath(); ctx.fill();
   if (p.muzzle > 0) ctx.drawImage(Sprites.glow.amber.c, -16, -50, 32, 32);
   ctx.globalCompositeOperation = 'source-over';
