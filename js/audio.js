@@ -233,45 +233,184 @@ const Sound = (() => {
     },
   };
 
-  // Small step sequencer with look-ahead scheduling.
-  const SONGS = {
-    normal: { tempo: 124, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]] },
-    boss: { tempo: 146, chords: [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52]] },
-  };
-  const BASS_STEPS = new Set([0, 3, 6, 8, 10, 11, 14]);
+  // The score is not a loop. It is a handful of layers that listen to the dive:
+  //   a drone whose root falls with each zone of water,
+  //   a music-box line that plays short motifs and repeats them with small changes, echoing,
+  //   the sound of the surface, fading as you go down,
+  //   long low glides in the deep water, like something very large far away,
+  //   and in a fight, a slow heartbeat that thickens as the water fills up.
+  // Modes: 'calm' (title page, supplies), 'normal' (a dive), 'boss'.
+  const ZONE_ROOTS = [[0, 38], [800, 36], [2400, 33], [5000, 29], [9000, 26]];
+  const SCALE = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24];
 
   const Music = {
-    playing: false, mode: 'normal', step: 0, nextTime: 0, timer: null,
+    playing: false, mode: 'calm', timer: null,
+    root: 38, depth: 0, intensity: 0,
+    nextNote: 0, nextBeat: 0, beat: 0, nextGlide: 0,
+    motif: [], motifPos: 0, motifRepeats: 0,
+    drone: null, surf: null, echo: null,
+
     start() {
       if (!ctx || this.playing) return;
-      this.playing = true; this.step = 0;
-      this.nextTime = ctx.currentTime + 0.1;
-      this.timer = setInterval(() => this.tick(), 25);
+      this.playing = true;
+      const t = ctx.currentTime;
+
+      // an echo, darkened a little on every repeat, like sound travelling through water
+      const d = ctx.createDelay(1.5), fb = ctx.createGain(), tone_ = ctx.createBiquadFilter(), wet = ctx.createGain();
+      d.delayTime.value = 0.46; fb.gain.value = 0.42;
+      tone_.type = 'lowpass'; tone_.frequency.value = 1700;
+      wet.gain.value = 0.55;
+      d.connect(tone_); tone_.connect(fb); fb.connect(d); tone_.connect(wet); wet.connect(musicBus);
+      this.echo = d;
+
+      // the drone: two slightly detuned voices a fifth apart, breathing through a slow filter
+      const dg = ctx.createGain(); dg.gain.value = 0;
+      const df = ctx.createBiquadFilter(); df.type = 'lowpass'; df.frequency.value = 380; df.Q.value = 2;
+      const lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+      lfo.frequency.value = 0.07; lfoG.gain.value = 140;
+      lfo.connect(lfoG); lfoG.connect(df.frequency); lfo.start(t);
+      const oscs = [];
+      for (const [ratio, det, type] of [[1, -4, 'triangle'], [1, 5, 'sine'], [1.5, 2, 'triangle'], [0.5, 0, 'sine']]) {
+        const o = ctx.createOscillator();
+        o.type = type; o.frequency.value = midi(this.root) * ratio; o.detune.value = det;
+        o.connect(df); o.start(t);
+        oscs.push([o, ratio]);
+      }
+      df.connect(dg); dg.connect(musicBus);
+      dg.gain.setTargetAtTime(0.09, t, 2.5);
+      this.drone = { gain: dg, oscs };
+
+      // the surface: looping noise shaped into slow swells
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuf; src.loop = true;
+      const sf = ctx.createBiquadFilter(); sf.type = 'bandpass'; sf.frequency.value = 420; sf.Q.value = 0.7;
+      const sg = ctx.createGain(); sg.gain.value = 0;
+      const swell = ctx.createOscillator(), swellG = ctx.createGain();
+      swell.frequency.value = 0.11; swellG.gain.value = 0.025;
+      swell.connect(swellG); swellG.connect(sg.gain); swell.start(t);
+      src.connect(sf); sf.connect(sg); sg.connect(musicBus); src.start(t);
+      this.surf = sg;
+
+      this.nextNote = t + 1.5; this.nextBeat = t + 1; this.nextGlide = t + 8;
+      this.timer = setInterval(() => this.tick(), 50);
+      this.setDepth(0, true);
     },
-    setMode(m) { this.mode = m; },
+
+    setMode(m) {
+      if (m === this.mode) return;
+      this.mode = m;
+      if (!ctx || !this.drone) return;
+      // the boss drone sits a semitone of unease above where it should be
+      this.retune(true);
+      this.drone.gain.gain.setTargetAtTime(m === 'boss' ? 0.13 : m === 'calm' ? 0.07 : 0.09, ctx.currentTime, 1.2);
+      this.motif = [];
+    },
+
+    setIntensity(n) { this.intensity = Math.min(1, n / 20); },
+
+    setDepth(d, force) {
+      // called every frame; only act when the depth has actually moved
+      if (!force && Math.abs(d - this.depth) < 25) return;
+      this.depth = d;
+      let root = ZONE_ROOTS[0][1];
+      for (const [from, r] of ZONE_ROOTS) if (d >= from) root = r;
+      if (this.surf) this.surf.gain.setTargetAtTime(0.035 * Math.max(0, 1 - d / 1800), ctx.currentTime, 1.5);
+      if (root !== this.root || force) { this.root = root; this.retune(); }
+    },
+
+    retune() {
+      if (!this.drone) return;
+      const base = midi(this.root + (this.mode === 'boss' ? 1 : 0));
+      for (const [o, ratio] of this.drone.oscs) o.frequency.setTargetAtTime(base * ratio, ctx.currentTime, 3);
+    },
+
+    // one plucked note of the music box: a pure tone with a bell-like overtone, sent into the echo
+    bell(t, m, vol) {
+      const f = midi(m);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      for (const [ratio, v] of [[1, 1], [2.76, 0.18], [5.4, 0.05]]) {
+        const o = ctx.createOscillator(), og = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f * ratio; og.gain.value = v;
+        o.connect(og); og.connect(g);
+        o.start(t); o.stop(t + 2.3);
+      }
+      g.connect(musicBus);
+      g.connect(this.echo);
+    },
+
+    newMotif() {
+      const len = randi(3, 6);
+      let idx = randi(2, 6);
+      this.motif = [];
+      for (let i = 0; i < len; i++) {
+        this.motif.push({ step: idx, gap: pick([1, 1, 1.5, 2, 3]) });
+        idx = clamp(idx + pick([-2, -1, -1, 1, 1, 2, 3]), 0, SCALE.length - 1);
+      }
+      this.motifPos = 0;
+      this.motifRepeats = randi(2, 3);
+    },
+
+    heartbeat(t, strong) {
+      const v = (strong ? 0.5 : 0.28) * (0.35 + this.intensity * 0.65);
+      tone({ at: t, type: 'sine', f: 70, f2: 38, dur: 0.28, vol: v, bus: musicBus });
+      tone({ at: t + 0.21, type: 'sine', f: 60, f2: 34, dur: 0.24, vol: v * 0.6, bus: musicBus });
+    },
+
     tick() {
       if (ctx.state !== 'running') return;
-      const song = SONGS[this.mode];
-      const spb = 60 / song.tempo / 4;
-      if (this.nextTime < ctx.currentTime - 0.2) this.nextTime = ctx.currentTime + 0.05;
-      while (this.nextTime < ctx.currentTime + 0.12) {
-        this.play(song, this.step, this.nextTime, spb);
-        this.nextTime += spb;
-        this.step = (this.step + 1) % 64;
+      const now = ctx.currentTime, ahead = now + 0.2;
+      if (this.nextNote < now - 1) this.nextNote = now + 0.1;
+      if (this.nextBeat < now - 1) this.nextBeat = now + 0.1;
+
+      // music box: slower and sparser when calm, a little restless in a fight
+      while (this.nextNote < ahead) {
+        if (!this.motif.length || this.motifPos >= this.motif.length) {
+          if (this.motif.length && --this.motifRepeats > 0) {
+            this.motifPos = 0;
+            // a small change each time round, so it never quite repeats
+            const n = pick(this.motif);
+            n.step = clamp(n.step + pick([-1, 1]), 0, SCALE.length - 1);
+            this.nextNote += 1.2;
+          } else {
+            this.newMotif();
+            this.nextNote += this.mode === 'calm' ? 3.5 : 2.2;
+          }
+          continue;
+        }
+        const n = this.motif[this.motifPos++];
+        const octave = this.mode === 'boss' ? 36 : 36 + (this.depth > 5000 ? -12 : 0);
+        const vol = this.mode === 'calm' ? 0.05 : 0.065;
+        this.bell(this.nextNote, this.root + octave + SCALE[n.step] + (this.mode === 'boss' && n.step % 3 === 1 ? 1 : 0), vol);
+        const unit = this.mode === 'calm' ? 0.62 : this.mode === 'boss' ? 0.4 : 0.5;
+        this.nextNote += n.gap * unit;
       }
-    },
-    play(song, s, t, spb) {
-      const bar = s >> 4, i = s & 15;
-      const ch = song.chords[bar];
-      const boss = this.mode === 'boss';
-      if (i % 4 === 0) tone({ at: t, type: 'sine', f: 150, f2: 45, dur: 0.18, vol: 0.5, bus: musicBus });
-      if (i === 4 || i === 12) noise({ at: t, dur: 0.12, vol: 0.18, filter: 'bandpass', f: 1800, bus: musicBus });
-      if (i % 2 === 1) noise({ at: t, dur: 0.03, vol: 0.08, filter: 'highpass', f: 7000, bus: musicBus });
-      if (BASS_STEPS.has(i)) {
-        tone({ at: t, type: 'sawtooth', f: midi(ch[0] - 24), dur: spb * 1.6, vol: 0.2, filter: 'lowpass', ff: 520, bus: musicBus });
+
+      // the heartbeat, only during a dive
+      if (this.mode !== 'calm') {
+        const period = this.mode === 'boss' ? 60 / 84 : 60 / 62;
+        while (this.nextBeat < ahead) {
+          if (this.mode === 'boss' || this.intensity > 0.05) this.heartbeat(this.nextBeat, this.beat % 4 === 0);
+          // in a boss fight, a low cluster swells up every eight beats
+          if (this.mode === 'boss' && this.beat % 8 === 0) {
+            for (const iv of [0, 1, 6]) tone({ at: this.nextBeat, type: 'sawtooth', f: midi(this.root + 12 + iv), dur: 2.6, vol: 0.035, attack: 1.2, filter: 'lowpass', ff: 600, bus: musicBus });
+          }
+          this.beat++;
+          this.nextBeat += period;
+        }
+      } else {
+        this.nextBeat = ahead;
       }
-      const note = ch[i % 3] + 12 * ((i >> 2) % 2) + (boss ? 12 : 0);
-      tone({ at: t, type: 'triangle', f: midi(note), dur: spb * 0.9, vol: 0.06, filter: 'lowpass', ff: 1300, bus: musicBus });
+
+      // far below: something very large calling now and then
+      if (this.depth >= 2400 && now > this.nextGlide) {
+        this.nextGlide = now + rand(12, 26);
+        const f = rand(150, 220);
+        tone({ at: now + 0.1, type: 'sine', f, f2: f * rand(0.55, 0.7), dur: 3.4, vol: 0.05, attack: 1.1, bus: this.echo });
+        tone({ at: now + 0.1, type: 'triangle', f: f * 2.01, f2: f * 1.3, dur: 3, vol: 0.015, attack: 1.3, bus: this.echo });
+      }
     },
   };
 
@@ -288,6 +427,7 @@ const Sound = (() => {
 
   function setDepth(d) {
     if (!water) return;
+    Music.setDepth(d);
     const f = Math.round(lerp(5000, 1100, clamp(d / 8000, 0, 1)) / 50) * 50;
     if (f !== waterF) { waterF = f; water.frequency.setTargetAtTime(f, ctx.currentTime, 0.6); }
   }

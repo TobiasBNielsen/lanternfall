@@ -90,7 +90,7 @@ function toMenu() {
   state = 'menu';
   G = null;
   Background.setDepth(0);
-  Sound.Music.setMode('normal');
+  Sound.Music.setMode('calm');
   refreshBest();
   showScreen('menu');
 }
@@ -115,7 +115,7 @@ function gameOver() {
   $('signStatus').textContent = '';
   $('signStatus').classList.remove('err');
   $('signBtn').disabled = false;
-  Sound.Music.setMode('normal');
+  Sound.Music.setMode('calm');
   showScreen('gameover');
 }
 
@@ -177,6 +177,7 @@ function openDock() {
   Input.mouseDown = false;
   G.shots.length = 0;
   Sound.sfx.dock();
+  Sound.Music.setMode('calm');
   renderDock();
   showScreen('dock');
 }
@@ -196,6 +197,7 @@ function buyItem(i) {
 function leaveDock() {
   if (state !== 'dock') return;
   Sound.sfx.click();
+  Sound.Music.setMode('normal');
   startWave(G.wave + 1);
   G.player.invuln = Math.max(G.player.invuln, 1);
   state = 'playing';
