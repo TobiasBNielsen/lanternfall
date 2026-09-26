@@ -56,7 +56,10 @@ begin
   if p_duration is null or p_duration < v_waves * 8 then
     raise exception 'That dive was faster than the water allows.';
   end if;
-  if p_score is null or p_score < 0 or p_score > v_waves * 20000 + v_waves * v_waves * 600 + 50000 then
+  if p_score is null or p_score <= 0 then
+    raise exception 'There is nothing to sign for yet.';
+  end if;
+  if p_score > v_waves * 20000 + v_waves * v_waves * 600 + 50000 then
     raise exception 'That score does not fit the depth.';
   end if;
   if p_kills is null or p_kills < 0 or p_kills > v_waves * 90 + 20 then
