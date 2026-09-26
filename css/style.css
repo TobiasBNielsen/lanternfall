@@ -286,6 +286,22 @@ b { font-weight: 700; }
 .sonar-btn:active { background: rgba(242, 169, 59, 0.25); }
 body.touch .sonar-btn { display: flex; }
 
+/* ------------------------------------------------------------ first-dive notes */
+
+.hint-line {
+  position: fixed; z-index: 6;
+  left: calc(16px + var(--safe-l)); bottom: calc(78px + var(--safe-b));
+  width: max-content; max-width: min(420px, calc(100% - 110px));
+  padding: 8px 14px 9px;
+  background: var(--blue-dim);
+  border-left: 1px solid var(--amber);
+  font-size: 13.5px; line-height: 1.45;
+  pointer-events: none;
+  animation: hint-in 0.4s ease both;
+}
+.hint-mark { font-family: var(--fell); font-style: italic; font-size: 16px; color: var(--amber); margin-right: 6px; }
+@keyframes hint-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+
 /* ------------------------------------------------------------ field-book plate */
 
 .plate-toast {

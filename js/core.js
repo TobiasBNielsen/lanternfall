@@ -69,6 +69,8 @@ function update(dt) {
   compact(G.timers);
 
   updateWaveFlow(dt);
+  if (G.sonar > 0 && G.enemies.length >= 16 && G.wave >= 2) hint('sonar');
+  if (G.boss && G.boss.state === 'fight') hint('boss');
   updatePlayer(dt);
   updateAir(dt);
   updateBullets(dt);
@@ -193,7 +195,12 @@ function updatePlayer(dt) {
 function updateAir(dt) {
   const p = G.player;
   if (G.waveState !== 'active' || !p.alive) return;
-  G.oxygen -= dt * 2.1;
+  G.oxygen -= dt * 2.1 * (G.wave === 1 ? 0.6 : 1);
+  if (G.oxygen < 70 && !hintsSeen.has('air')) {
+    hint('air');
+    // make sure the first lesson about air has an answer close by
+    G.pickups.push({ type: 'air', x: clamp(p.x + rand(-90, 90), 40, View.W - 40), y: View.H + 30, vx: 0, vy: -70, t: rand(TAU), r: 18, dead: false });
+  }
   if (G.oxygen <= 0) {
     G.oxygen = 0;
     playerHit('air');
@@ -241,6 +248,7 @@ function updateEnemies(dt) {
         if (e.shotT <= 0) {
           e.shotT = rand(4, 16) / G.shotMul * (e.kind === 'angler' ? 1.4 : T.slow || 1) * (e.kind === 'gulper' ? 0.6 : 1);
           e.tell = e.kind === 'angler' ? 0.55 : e.kind === 'gulper' ? 0.7 : 0.35;
+          hint('tell');
         }
       }
     }

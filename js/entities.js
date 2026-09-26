@@ -115,6 +115,7 @@ function playerHit(cause) {
       G.pickups.push({ type: 'pearl', value: v, x: p.x, y: p.y, vx: rand(-160, 160), vy: rand(-260, -80), r: 12, rot: 0, dead: false, spilled: true });
     }
     floatText(p.x, p.y - 40, `lost ${lost} pearls`, '#e8eee6', 18, 1.4);
+    hint('spill');
   }
   if (cause === 'air') floatText(p.x, p.y - 70, 'no air', '#f2a93b', 26, 1.6);
   if (G.hull <= 0) G.gameOverT = 2.4;
@@ -326,6 +327,7 @@ function bossDeath(b) {
 // ---------------------------------------------------------------- pickups
 
 function dropPearl(x, y, value) {
+  hint('pearl');
   G.pickups.push({ type: 'pearl', value, x, y, vx: rand(-60, 60), vy: rand(-160, -40), r: value > 1 ? 14 : 11, dead: false });
 }
 

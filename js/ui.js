@@ -68,6 +68,7 @@ function startGame() {
   Input.mouseDown = false;
   state = 'playing';
   showScreen(null);
+  hint('steer');
 }
 
 function pauseGame() {
@@ -88,6 +89,7 @@ function resumeGame() {
 
 function toMenu() {
   state = 'menu';
+  clearHints();
   G = null;
   Background.setDepth(0);
   Sound.Music.setMode('calm');
@@ -178,6 +180,7 @@ function openDock() {
   G.shots.length = 0;
   Sound.sfx.dock();
   Sound.Music.setMode('calm');
+  hint('dock');
   renderDock();
   showScreen('dock');
 }
@@ -268,6 +271,55 @@ $('signForm').addEventListener('submit', async e => {
     $('signBtn').disabled = false;
   }
 });
+
+// ---------------------------------------------------------------- first-dive notes
+
+// Each note shows once, ever, at the moment it becomes useful. They never pause the game.
+const HINTS = {
+  steer: () => Input.mode === 'touch'
+    ? 'Drag anywhere to steer. The harpoon fires while your finger is down.'
+    : 'Steer with the mouse. Hold the button down to fire.',
+  pearl: 'A pearl. Sweep over it. The ship takes pearls as payment for supplies.',
+  tell: 'That flicker is a warning. Something is about to spit at you.',
+  air: 'The air is running down. Catch a bubble rising from below.',
+  spill: 'Half your pearls spilled out. They sink slowly, so go after them.',
+  sonar: () => Input.mode === 'touch'
+    ? 'Crowded? The round button sends a sonar blast that clears the water.'
+    : 'Crowded? Right-click, or M, sends a sonar blast that clears the water.',
+  boss: 'It cannot be hurt all over. Look for the part that can.',
+  dock: 'Spend pearls here. Early on, grading up your weapon is usually the best buy.',
+};
+const hintsSeen = new Set(Store.get('lf_hints', []));
+const hintQueue = [];
+let hintTimer = null;
+
+function hint(key) {
+  if (hintsSeen.has(key)) return;
+  hintsSeen.add(key);
+  Store.set('lf_hints', [...hintsSeen]);
+  hintQueue.push(key);
+  if (!hintTimer) nextHint();
+}
+
+function nextHint() {
+  const el = $('hintLine');
+  const key = hintQueue.shift();
+  if (!key) { hintTimer = null; el.classList.add('hidden'); return; }
+  const h = HINTS[key];
+  $('hintText').textContent = typeof h === 'function' ? h() : h;
+  // restart the fade-in for each new note
+  el.classList.add('hidden');
+  void el.offsetWidth;
+  el.classList.remove('hidden');
+  hintTimer = setTimeout(nextHint, 5600);
+}
+
+function clearHints() {
+  hintQueue.length = 0;
+  clearTimeout(hintTimer);
+  hintTimer = null;
+  $('hintLine').classList.add('hidden');
+}
 
 // ---------------------------------------------------------------- the field book
 

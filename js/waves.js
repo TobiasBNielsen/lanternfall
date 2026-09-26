@@ -68,6 +68,7 @@ const WaveTypes = {
     return {
       begin() {
         C = clamp(Math.round(View.W / 220), 3, def.clusters);
+        if (C % 2 === 0) C--;
         for (let c = 0; c < C; c++) {
           for (let i = 0; i < def.per; i++) {
             const kind = def.kinds[(c + i) % def.kinds.length];
