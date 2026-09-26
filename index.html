@@ -65,6 +65,11 @@
         <button id="playBtn" class="begin">Begin the descent <span aria-hidden="true">&darr;</span></button>
       </header>
 
+      <section class="board">
+        <h2>The deepest dives</h2>
+        <ol id="boardList" class="board-list"><li class="board-note">Asking the ship&hellip;</li></ol>
+      </section>
+
       <section class="notes">
         <h2>Handling the sphere</h2>
         <dl class="handling desktop-only">
@@ -131,6 +136,14 @@
       <p class="prose">That is <span id="goZone">sunlit water</span>. Before the telephone cut out we had taken <b id="goKills">0</b> of them and brought up <b id="goPearls">0</b> pearls. The field book has <b id="goSpecies">0 of 6</b> species in it.</p>
       <p class="score-line">Score for the dive: <b id="goScore">0</b></p>
       <p class="prose small" id="goBest"></p>
+      <form id="signForm" class="sign" autocomplete="off">
+        <label for="signName">Sign the log, so the others can see how deep you went.</label>
+        <div class="sign-row">
+          <input id="signName" name="name" maxlength="16" placeholder="your name" spellcheck="false" required>
+          <button type="submit" id="signBtn" class="plain">Sign</button>
+        </div>
+        <p class="sign-status" id="signStatus" aria-live="polite"></p>
+      </form>
       <div class="actions">
         <button id="againBtn" class="begin small">Send down another sphere</button>
         <button id="goMenuBtn" class="plain">Back to the title page</button>
@@ -144,6 +157,7 @@
   <script src="js/background.js"></script>
   <script src="js/entities.js"></script>
   <script src="js/waves.js"></script>
+  <script src="js/leaderboard.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>

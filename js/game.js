@@ -45,7 +45,7 @@ function resetGame() {
     player: makePlayer(), bullets: [], enemies: [], shots: [], pickups: [], particles: [], texts: [], timers: [],
     buoy: null, boss: null, kills: 0,
     waveState: 'intro', waveT: 0, waveObj: null, waveDef: null, clearBonus: 0,
-    shake: 0, flash: 0, time: 0, gameOverT: 0, hitStop: 0, creakT: 8,
+    shake: 0, flash: 0, time: 0, playTime: 0, gameOverT: 0, hitStop: 0, creakT: 8,
     hpMul: 1, shotMul: 1, shotSpeed: 1, shotCap: 8,
   };
   startWave(1);
@@ -57,6 +57,8 @@ const Input = { keys: {}, mx: 0, my: 0, mouseDown: false, mode: 'mouse', touchId
 const MOVE_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
 
 window.addEventListener('keydown', e => {
+  // typing a name into the log must not steer the sphere or restart the dive
+  if (e.target && e.target.tagName === 'INPUT') return;
   Input.keys[e.code] = true;
   if (MOVE_KEYS.includes(e.code)) Input.mode = 'keys';
   if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
@@ -128,6 +130,7 @@ function isFiring() {
 
 function update(dt) {
   // a tiny freeze on big hits, so they land
+  G.playTime += dt;
   if (G.hitStop > 0) { G.hitStop -= dt; dt *= 0.12; }
   G.time += dt;
   const timers = G.timers;
@@ -889,6 +892,7 @@ function refreshBest() {
     ? `Deepest so far: ${best.depth.toLocaleString('en-US')} ft, with ${best.score.toLocaleString('en-US')} points.`
     : 'No dives in the log yet.';
   renderPlates();
+  renderBoard();
 }
 
 function startGame() {
@@ -940,6 +944,14 @@ function gameOver() {
   $('goScore').textContent = G.score.toLocaleString('en-US');
   $('goBest').textContent = record ? 'That is the best dive in the log.' : `The best dive in the log is still ${best.score.toLocaleString('en-US')}.`;
   $('goSpecies').textContent = `${speciesLog.size} of ${Object.keys(SPECIES).length}`;
+  lastDive = { score: G.score, depth: G.depth, kills: G.kills, species: speciesLog.size, duration: Math.round(G.playTime) };
+  const form = $('signForm');
+  form.classList.toggle('hidden', G.score <= 0);
+  form.classList.remove('done');
+  $('signName').value = Store.get('lf_name', '');
+  $('signStatus').textContent = '';
+  $('signStatus').classList.remove('err');
+  $('signBtn').disabled = false;
   Sound.Music.setMode('normal');
   showScreen('gameover');
 }
@@ -1027,6 +1039,70 @@ function leaveDock() {
   lastT = performance.now();
   showScreen(null);
 }
+
+// ---------------------------------------------------------------- the deepest dives
+
+let lastDive = null;
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+async function renderBoard() {
+  const list = $('boardList');
+  const note = text => {
+    list.textContent = '';
+    const li = document.createElement('li');
+    li.className = 'board-note';
+    li.textContent = text;
+    list.appendChild(li);
+  };
+  try {
+    const rows = await Leaderboard.top(10);
+    if (!rows || !rows.length) { note('Nobody has signed the log yet. Be the first.'); return; }
+    const mine = Store.get('lf_name', '');
+    list.textContent = '';
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (mine && r.name === mine) li.className = 'me';
+      li.innerHTML = '<span class="n"></span><span class="who"></span><span class="ft"></span><span class="pts"></span>';
+      li.querySelector('.n').textContent = i + 1 + '.';
+      li.querySelector('.who').textContent = r.name;
+      li.querySelector('.ft').textContent = r.depth.toLocaleString('en-US') + ' ft';
+      li.querySelector('.pts').textContent = r.score.toLocaleString('en-US');
+      list.appendChild(li);
+    });
+  } catch (e) {
+    note(`${e.message} The log will be here when the line is back.`);
+  }
+}
+
+$('signForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!lastDive) return;
+  const name = $('signName').value.trim().replace(/\s+/g, ' ');
+  const status = $('signStatus');
+  if (!name) return;
+  Store.set('lf_name', name);
+  $('signBtn').disabled = true;
+  status.classList.remove('err');
+  status.textContent = 'Sending it up to the ship…';
+  try {
+    const r = await Leaderboard.submit({ ...lastDive, name });
+    lastDive = null;
+    $('signForm').classList.add('done');
+    const rank = r ? Number(r.rank) : 0;
+    status.textContent = rank
+      ? `Signed. That puts you ${ordinal(rank)} in the log${r.personal_best ? ', and it is your best dive yet' : ''}.`
+      : 'Signed.';
+    Sound.sfx.logged();
+  } catch (err) {
+    status.classList.add('err');
+    status.textContent = err.message;
+    $('signBtn').disabled = false;
+  }
+});
 
 // ---------------------------------------------------------------- the field book
 

@@ -115,14 +115,15 @@ b { font-weight: 700; }
 .title-page {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  grid-template-areas: 'mast notes' 'mast book';
+  grid-template-areas: 'mast notes' 'board book';
   column-gap: 64px; row-gap: 34px;
   width: 100%; max-width: 1080px;
   margin: auto 0;
 }
-.masthead { grid-area: mast; align-self: center; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+.masthead { grid-area: mast; align-self: end; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
 .notes { grid-area: notes; display: flex; flex-direction: column; gap: 12px; }
 .book { grid-area: book; }
+.board { grid-area: board; align-self: start; max-width: 480px; }
 
 .logo {
   font-size: clamp(64px, 10vw, 128px);
@@ -134,7 +135,7 @@ b { font-weight: 700; }
 .record { font-size: 13px; color: var(--paper-dim); padding-top: 12px; border-top: 1px solid var(--paper-faint); width: min(100%, 42ch); }
 .masthead .begin { margin-top: 6px; }
 
-.notes h2, .book h2 {
+.notes h2, .book h2, .board h2 {
   font-size: 22px; font-style: italic;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--paper-faint);
@@ -154,6 +155,33 @@ b { font-weight: 700; }
 .plate canvas { width: 84px; height: 84px; }
 .plate figcaption { font-family: var(--fell); font-style: italic; font-size: 14px; text-align: center; line-height: 1.2; }
 .plate.unknown figcaption { color: var(--paper-faint); font-family: var(--type); font-style: normal; font-size: 11px; }
+
+/* ------------------------------------------------------------ the deepest dives */
+
+.board-list { list-style: none; margin-top: 8px; font-size: 13.5px; }
+.board-list li { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 14px; align-items: baseline; padding: 5px 0; border-bottom: 1px dotted var(--paper-faint); }
+.board-list .n { color: var(--paper-dim); }
+.board-list .who { font-family: var(--fell); font-style: italic; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .ft { color: var(--paper-dim); text-align: right; }
+.board-list .pts { text-align: right; min-width: 64px; }
+.board-list li.me .who, .board-list li.me .pts { color: var(--amber); }
+.board-list li.board-note { display: block; color: var(--paper-dim); border: 0; }
+
+.sign { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--paper-faint); font-size: 13px; color: var(--paper-dim); }
+.sign-row { display: flex; align-items: baseline; gap: 16px; }
+.sign input {
+  flex: 1; min-width: 0;
+  font-family: var(--fell); font-style: italic; font-size: 22px;
+  color: var(--paper);
+  background: none; border: 0; border-bottom: 1px solid var(--paper-dim);
+  padding: 2px 0 4px;
+  user-select: text; -webkit-user-select: text;
+}
+.sign input::placeholder { color: var(--paper-faint); }
+.sign input:focus { outline: none; border-bottom-color: var(--amber); }
+.sign-status { min-height: 1.2em; color: var(--paper); }
+.sign-status.err { color: var(--amber); }
+.sign.done .sign-row { display: none; }
 
 /* ------------------------------------------------------------ dock */
 
@@ -282,7 +310,7 @@ body.touch .sonar-btn { display: flex; }
 /* ------------------------------------------------------------ small screens */
 
 @media (max-width: 860px) {
-  .title-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'mast' 'notes' 'book'; row-gap: 40px; max-width: 540px; }
+  .title-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'mast' 'board' 'notes' 'book'; row-gap: 40px; max-width: 540px; }
   .menu { background: rgba(8, 20, 50, 0.5); }
 }
 
