@@ -45,7 +45,7 @@ function resetGame() {
     player: makePlayer(), bullets: [], enemies: [], shots: [], pickups: [], particles: [], texts: [], timers: [],
     buoy: null, boss: null, kills: 0,
     waveState: 'intro', waveT: 0, waveObj: null, waveDef: null, clearBonus: 0,
-    shake: 0, flash: 0, time: 0, playTime: 0, gameOverT: 0, hitStop: 0, creakT: 8,
+    shake: 0, flash: 0, time: 0, playTime: 0, gameOverT: 0, hitStop: 0, creakT: 8, forceDark: 0, dragX: 0, dragY: 0,
     hpMul: 1, shotMul: 1, shotSpeed: 1, shotCap: 8,
   };
   startWave(1);
@@ -218,15 +218,33 @@ function updatePlayer(dt) {
     const dx = (k.ArrowRight || k.KeyD ? 1 : 0) - (k.ArrowLeft || k.KeyA ? 1 : 0);
     const dy = (k.ArrowDown || k.KeyS ? 1 : 0) - (k.ArrowUp || k.KeyW ? 1 : 0);
     const len = Math.hypot(dx, dy) || 1;
-    p.x += (dx / len) * 540 * dt;
-    p.y += (dy / len) * 540 * dt;
+    p.x += (dx / len) * 540 * dt + G.dragX * dt * 1.6;
+    p.y += (dy / len) * 540 * dt + G.dragY * dt * 1.6;
   } else {
     const f = Math.min(1, dt * (Input.mode === 'touch' ? 22 : 15));
-    let mx = (Input.mx - p.x) * f, my = (Input.my - p.y) * f;
+    let mx = (Input.mx + G.dragX - p.x) * f, my = (Input.my + G.dragY - p.y) * f;
     const maxStep = 1400 * dt, d = Math.hypot(mx, my);
     if (d > maxStep) { mx *= maxStep / d; my *= maxStep / d; }
     p.x += mx; p.y += my;
   }
+  // an open gulper drags the sphere toward its mouth
+  let pulled = false;
+  for (const e of G.enemies) {
+    if (e.dead || e.kind !== 'gulper' || e.open <= 0) continue;
+    const dx = e.x - p.x, dy = e.y + 10 - p.y, d = Math.hypot(dx, dy) || 1;
+    if (d > 560) continue;
+    // the pull shifts where the sphere is trying to go, so steering has to fight it
+    const pull = 340 * (1 - d / 560);
+    G.dragX += (dx / d) * pull * dt; G.dragY += (dy / d) * pull * dt;
+    pulled = true;
+    if (chance(dt * 24)) {
+      const k = rand(0.2, 0.9);
+      spawnParticle({ kind: 'bubble', x: lerp(p.x, e.x, k) + rand(-30, 30), y: lerp(p.y, e.y, k), vx: dx / d * 220, vy: dy / d * 220, life: 0.5, size: rand(1.5, 3), seed: rand(TAU) });
+    }
+  }
+  if (!pulled) { const k = Math.max(0, 1 - dt * 3); G.dragX *= k; G.dragY *= k; }
+  const dm = Math.hypot(G.dragX, G.dragY);
+  if (dm > 320) { G.dragX *= 320 / dm; G.dragY *= 320 / dm; }
   p.x = clamp(p.x, 30, W - 30);
   p.y = clamp(p.y, 60, H - 40);
   p.vx = (p.x - oldX) / Math.max(dt, 1e-4);
@@ -266,15 +284,45 @@ function updateAir(dt) {
 }
 
 function updateBullets(dt) {
-  const W = View.W;
+  const W = View.W, H = View.H;
   for (const b of G.bullets) {
-    if (b.kind === 'bubble') { b.wob += dt * 14; b.x += Math.sin(b.wob) * 60 * dt; }
-    b.x += b.vx * dt; b.y += b.vy * dt;
-    if (b.y < -50 || b.x < -50 || b.x > W + 50) { b.dead = true; continue; }
+    if (b.kind === 'net' && b.open > 0) { updateNet(b, dt); continue; }
+    if (b.kind === 'flare') {
+      b.life -= dt;
+      if (b.stuck) {
+        if (!b.stuck.dead) { b.x = hitX(b.stuck) + b.sx; b.y = hitY(b.stuck) + b.sy; }
+      } else {
+        b.vy += 240 * dt;
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        b.ang = Math.atan2(b.vx, -b.vy);
+      }
+      if (chance(dt * 30)) spawnParticle({ kind: 'glow', color: 'amber', x: b.x, y: b.y, vx: rand(-20, 20), vy: rand(10, 40), life: 0.25, size: 16, grow: -0.6 });
+      if (b.life <= 0) { b.dead = true; flareBurst(b); continue; }
+      if (b.stuck) continue;
+    } else {
+      if (b.kind === 'bubble') { b.wob += dt * 14; b.x += Math.sin(b.wob) * 60 * dt; }
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.kind === 'net') { b.life -= dt; if (b.life <= 0) { openNet(b); continue; } }
+    }
+    if (b.y < -50 || b.x < -50 || b.x > W + 50 || b.y > H + 50) { b.dead = true; continue; }
     for (const e of G.enemies) {
       if (e.dead || e.hidden || e.y < -40) continue;
+      // a body too big to shoot through: shots stop on it, flares stick to it
+      if (e.bodyR && dist2(b.x, b.y, e.x, e.y) < e.bodyR * e.bodyR && dist2(b.x, b.y, hitX(e), hitY(e)) > (e.r + b.r) * (e.r + b.r)) {
+        if (b.kind === 'flare') { b.stuck = e; b.sx = b.x - hitX(e); b.sy = b.y - hitY(e); b.life = Math.min(b.life, 0.8); }
+        else if (b.kind === 'net') openNet(b);
+        else { b.dead = true; spawnParticle({ kind: 'glow', color: 'paper', x: b.x, y: b.y, life: 0.1, size: 16 }); Sound.sfx.clink(); }
+        break;
+      }
+      const hx = hitX(e), hy = hitY(e);
       const rr = e.r + b.r;
-      if (dist2(b.x, b.y, e.x, e.y + (e.oy || 0)) < rr * rr) {
+      if (dist2(b.x, b.y, hx, hy) < rr * rr) {
+        if (b.kind === 'flare') {
+          b.stuck = e; b.sx = b.x - hx; b.sy = b.y - hy; b.life = Math.min(b.life, 0.8);
+          damageEnemy(e, b.dmg, b.x, b.y, 'flare');
+          break;
+        }
+        if (b.kind === 'net') { openNet(b); break; }
         if (b.pierce) {
           if (b.hits.includes(e)) continue;
           b.hits.push(e);
@@ -287,38 +335,68 @@ function updateBullets(dt) {
   compact(G.bullets);
 }
 
+function openNet(b) {
+  b.open = b.hold; b.r = 6; b.tick = 0;
+  b.vx = 0; b.vy = -18;
+  Sound.sfx.net();
+}
+
+// An open net drifts up slowly, tangles everything inside it and stings it a few times a second.
+function updateNet(b, dt) {
+  b.open -= dt;
+  if (b.open <= 0) { b.dead = true; return; }
+  b.y += b.vy * dt;
+  b.r = lerp(b.r, b.span, Math.min(1, dt * 7));
+  b.tick -= dt;
+  const sting = b.tick <= 0;
+  if (sting) b.tick = 0.25;
+  for (const e of G.enemies) {
+    if (e.dead || e.hidden) continue;
+    const rr = b.r + e.r * 0.6;
+    if (dist2(b.x, b.y, hitX(e), hitY(e)) > rr * rr) continue;
+    if (e.type === 'sea' || e.type === 'wreck') e.tangled = 0.35;
+    if (sting) damageEnemy(e, b.dmg * 0.25, hitX(e), hitY(e), 'net');
+  }
+}
+
 function updateEnemies(dt) {
   const p = G.player, H = View.H, W = View.W;
   for (const e of G.enemies) {
     if (e.dead) continue;
-    if (e.move) e.move(e, dt);
+    // anything caught in a net moves at a third of its speed
+    let mdt = dt;
+    if (e.tangled > 0) { e.tangled -= dt; mdt = dt * 0.35; }
+    if (e.move) e.move(e, mdt);
     e.flash = Math.max(0, e.flash - dt);
+    if (e.open > 0) e.open -= dt;
     if (e.type === 'wreck') {
-      e.x += e.vx * dt; e.y += e.vy * dt; e.rot += e.vr * dt;
+      e.x += e.vx * mdt; e.y += e.vy * mdt; e.rot += e.vr * mdt;
       if (e.y > H + e.r + 30 || e.x < -e.r - 150 || e.x > W + e.r + 150) e.dead = true;
     } else if (e.type !== 'arm') {
-      e.anim += dt * e.animSpeed;
+      e.anim += mdt * e.animSpeed;
       const vx = (e.x - e.lastX) / Math.max(dt, 1e-4);
       e.lastX = e.x;
       e.rot = lerp(e.rot, clamp(vx * 0.001, -0.3, 0.3), Math.min(1, dt * 6));
-      if (e.type === 'boss') e.rot *= 0.3;
+      if (e.type === 'boss' || e.kind === 'hatchet') e.rot *= 0.3;
     }
-    if (e.type === 'sea' && !e.hidden && e.y > 20 && e.y < H * 0.78 && e.x > 0 && e.x < W) {
+    const T = e.type === 'sea' ? SEA_TYPES[e.kind] : null;
+    if (T && T.shot && !e.hidden && e.open <= 0 && e.y > 20 && e.y < H * 0.78 && e.x > 0 && e.x < W) {
       // every creature gives a moment's warning before it attacks
       if (e.tell > 0) {
-        e.tell -= dt;
+        e.tell -= mdt;
         if (e.tell <= 0) creatureAttack(e);
       } else {
-        e.shotT -= dt;
+        e.shotT -= mdt;
         if (e.shotT <= 0) {
-          e.shotT = rand(4, 16) / G.shotMul * (e.kind === 'angler' ? 1.4 : 1);
-          e.tell = e.kind === 'angler' ? 0.55 : 0.35;
+          e.shotT = rand(4, 16) / G.shotMul * (e.kind === 'angler' ? 1.4 : T.slow || 1) * (e.kind === 'gulper' ? 0.6 : 1);
+          e.tell = e.kind === 'angler' ? 0.55 : e.kind === 'gulper' ? 0.7 : 0.35;
         }
       }
     }
     if (!e.hidden && p.alive && p.invuln <= 0) {
-      const rr = e.r * 0.8 + p.r;
-      if (dist2(e.x, e.y + (e.oy || 0), p.x, p.y) < rr * rr) {
+      const cy = e.bodyR ? e.y : e.y + (e.oy || 0);
+      const rr = (e.bodyR || e.r * 0.8) + p.r;
+      if (dist2(e.x, cy, p.x, p.y) < rr * rr) {
         playerHit();
         if (e.type === 'sea' || e.type === 'wreck') killEnemy(e);
       }
@@ -444,7 +522,7 @@ function render() {
 
 // Deep water swallows everything except whatever glows: the sub's lamp, lures, jellies, spores.
 function drawDarkness() {
-  const d = Background.darkness();
+  const d = Math.max(Background.darkness(), G.forceDark || 0);
   if (d <= 0.01) return;
   const W = View.W, H = View.H;
   // the light mask only needs refreshing every other frame; nobody can see a 16 ms lag in a shadow
@@ -467,13 +545,20 @@ function drawDarkness() {
       if (e.kind === 'angler') hole(e.x + 18, e.y - 35, 170, 1);
       else if (e.kind === 'urchin') hole(e.x, e.y, 110, 0.5);
       else hole(e.x, e.y - 10, 150, 0.8);
-    } else if (e.type === 'boss') hole(e.x, e.y - 40, 360, 0.6);
+    } else if (e.type === 'boss') {
+      if (e.variant === 'queen') hole(e.hx, e.hy, e.blackout > 0 ? 150 : 330, 1);
+      else hole(e.x, e.y - 40, 360, 0.6);
+    }
     else if (e.type === 'arm') hole(e.x, e.y, 120, 0.5);
     else hole(e.x, e.y, 90, 0.4);
   }
   for (const s of G.shots) hole(s.x, s.y, 70, 1);
   for (const pk of G.pickups) hole(pk.x, pk.y, 80, 0.9);
   if (G.buoy) hole(G.buoy.x, G.buoy.y, 160, 1);
+  for (const b of G.bullets) {
+    if (b.kind === 'flare') hole(b.x, b.y, 300, 1);
+    else if (b.kind === 'net' && b.open > 0) hole(b.x, b.y, b.r * 2.2, 0.5);
+  }
   dc.globalAlpha = 1;
   ctx.drawImage(darkCanvas, 0, 0, W, H);
 }
@@ -503,6 +588,25 @@ function drawParticles(layer) {
         if (p.dash) ctx.setLineDash([4, 6]);
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
         if (p.dash) ctx.setLineDash([]);
+        break;
+      }
+      case 'arc': {
+        // a spark jumping between creatures: a jagged amber line with a white core
+        ctx.globalAlpha = k;
+        const n = 7, dx = (p.x2 - p.x) / n, dy = (p.y2 - p.y) / n, len = Math.hypot(dx, dy);
+        const nx = -dy / (len || 1), ny = dx / (len || 1);
+        for (const [w, col] of [[3, AMBER], [1, PAPER]]) {
+          ctx.strokeStyle = col;
+          ctx.lineWidth = w;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          for (let i = 1; i < n; i++) {
+            const off = Math.sin(p.seed + i * 2.7 + G.time * 60) * 9;
+            ctx.lineTo(p.x + dx * i + nx * off, p.y + dy * i + ny * off);
+          }
+          ctx.lineTo(p.x2, p.y2);
+          ctx.stroke();
+        }
         break;
       }
       case 'ink':
@@ -553,7 +657,9 @@ function drawPickups() {
 function boilIndex(seed) { return (Math.floor(performance.now() / 140) + seed) % BOIL; }
 
 function creatureFrame(e) {
-  const set = Sprites.sea[e.type === 'boss' ? e.sprite : e.kind];
+  let key = e.type === 'boss' ? e.sprite : e.type === 'seg' ? 'colonySeg' : e.kind;
+  if (key === 'gulper' && e.open > 0) key = 'gulperOpen';
+  const set = Sprites.sea[key];
   const i = Math.floor(e.anim) % set.count;
   const b = boilIndex(e.boilSeed || 0);
   return e.flash > 0 ? set.flash[i][b] : set.frames[i][b];
@@ -616,17 +722,38 @@ function drawEnemies() {
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
+  // the thread that strings a chain colony together
+  ctx.strokeStyle = 'rgba(232,238,230,0.6)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (const e of G.enemies) {
+    if (e.kind !== 'chain' || e.dead || !e.lead || e.lead.dead) continue;
+    ctx.moveTo(e.x, e.y - 4); ctx.lineTo(e.lead.x, e.lead.y + 6);
+  }
+  ctx.stroke();
   for (const e of G.enemies) {
     if (e.hidden || e.type !== 'sea') continue;
-    let sc = 1;
+    let sc = e.scale || 1, x = e.x;
     if (e.tell > 0 && e.kind !== 'angler') {
+      if (e.kind === 'gulper') x += Math.sin(e.tell * 60) * 3;
       // jellies and thorns draw themselves in before they let go
-      sc = 1 - Math.sin((e.tell / 0.35) * Math.PI) * 0.08;
+      else sc *= 1 - Math.sin((e.tell / 0.35) * Math.PI) * 0.08;
     }
-    drawSprite(ctx, creatureFrame(e), e.x, e.y, e.rot, sc);
+    const f = creatureFrame(e);
+    if (e.flip) {
+      ctx.save();
+      ctx.translate(x, e.y);
+      ctx.scale(-1, 1);
+      drawSprite(ctx, f, 0, 0, -e.rot, sc);
+      ctx.restore();
+    } else {
+      drawSprite(ctx, f, x, e.y, e.rot, sc);
+    }
   }
   const b = G.boss;
-  if (b && !b.dead) {
+  if (b && !b.dead && b.variant === 'queen') drawQueenBoss(b);
+  else if (b && !b.dead && b.variant === 'colony') drawColonyBoss(b);
+  else if (b && !b.dead) {
     for (const arm of b.arms) drawArm(arm, b);
     const by = b.y + Math.sin(G.time * 1.6) * 5;
     drawSprite(ctx, creatureFrame(b), b.x, by, b.rot);
@@ -641,6 +768,63 @@ function drawEnemies() {
   }
 }
 
+function drawQueenBoss(b) {
+  const by = b.y + Math.sin(G.time * 1.2) * 4;
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(b.x + 6, by - 80);
+  ctx.quadraticCurveTo(b.x + 24 + b.sway * 0.3, by - 180, b.hx, b.hy + 8);
+  ctx.stroke();
+  drawSprite(ctx, creatureFrame(b), b.x, by, b.rot);
+  // her lamp: the only thing in the water worth aiming at
+  const dim = b.blackout > 0 ? 0.35 : 1;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = (0.75 + Math.sin(G.time * 5) * 0.15) * dim;
+  ctx.drawImage(Sprites.glow.amber.c, b.hx - 55, b.hy - 55, 110, 110);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = b.flash > 0 ? PAPER : AMBER;
+  ctx.beginPath(); ctx.arc(b.hx, b.hy, 10, 0, TAU); ctx.fill();
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(b.hx, b.hy, 10, 0, TAU); ctx.stroke();
+}
+
+function drawColonyBoss(b) {
+  let tail = -1;
+  for (let i = b.arms.length - 1; i >= 0; i--) if (!b.arms[i].dead) { tail = i; break; }
+  ctx.strokeStyle = 'rgba(232,238,230,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(b.x, b.y);
+  for (let i = 0; i <= tail; i++) ctx.lineTo(b.arms[i].x, b.arms[i].y);
+  ctx.stroke();
+  for (let i = tail; i >= 0; i--) {
+    const s = b.arms[i];
+    if (s.dead) continue;
+    drawSprite(ctx, creatureFrame(s), s.x, s.y, s.rot);
+  }
+  if (tail >= 0 && b.state === 'fight') {
+    // the one bell that can be cut right now
+    const s = b.arms[tail];
+    ctx.strokeStyle = AMBER;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 5]);
+    ctx.lineDashOffset = -G.time * 18;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 30, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  drawSprite(ctx, creatureFrame(b), b.x, b.y, b.rot);
+  if (b.armsLeft > 0 && b.state === 'fight') {
+    ctx.strokeStyle = 'rgba(232,238,230,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 7]);
+    ctx.beginPath(); ctx.arc(b.x, b.y, 50, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
 function drawShots() {
   for (const s of G.shots) {
     if (s.kind === 'spine') drawSprite(ctx, Sprites.spine, s.x, s.y, Math.atan2(s.vy, s.vx) - Math.PI / 2);
@@ -648,10 +832,43 @@ function drawShots() {
   }
 }
 
+// A net: a folded bundle in flight, then a mesh of amber cord once it opens.
+function drawNet(b) {
+  ctx.strokeStyle = AMBER;
+  if (!b.open) {
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, TAU); ctx.moveTo(b.x - 6, b.y); ctx.lineTo(b.x + 6, b.y); ctx.moveTo(b.x, b.y - 6); ctx.lineTo(b.x, b.y + 6); ctx.stroke();
+    return;
+  }
+  const r = b.r;
+  ctx.globalAlpha = Math.min(1, b.open * 2);
+  ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.stroke();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.clip();
+  ctx.lineWidth = 0.8;
+  ctx.globalAlpha *= 0.55;
+  ctx.beginPath();
+  for (let d = -r; d <= r; d += 13) {
+    ctx.moveTo(b.x - r, b.y + d - r); ctx.lineTo(b.x + r, b.y + d + r);
+    ctx.moveTo(b.x - r, b.y + d + r); ctx.lineTo(b.x + r, b.y + d - r);
+  }
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
 // Hundreds of these a second: skip save/restore and set the transform directly.
 function drawBullets() {
   const k = View.scale * View.dpr, ox = k * shakeX, oy = k * shakeY;
   for (const b of G.bullets) {
+    if (b.kind === 'net') { drawNet(b); continue; }
+    if (b.kind === 'flare') {
+      ctx.globalCompositeOperation = 'lighter';
+      const g = 60 + Math.sin(G.time * 40 + b.x) * 10;
+      ctx.drawImage(Sprites.glow.amber.c, b.x - g / 2, b.y - g / 2, g, g);
+      ctx.globalCompositeOperation = 'source-over';
+    }
     const sp = Sprites.bullet[b.kind];
     if (b.kind === 'bubble' || Math.abs(b.ang) < 0.02) {
       ctx.drawImage(sp.c, b.x - sp.w / 2, b.y - sp.h / 2, sp.w, sp.h);
@@ -744,10 +961,10 @@ function drawBossBar() {
     let hp = 0, max = 0;
     for (const a of b.arms) { hp += Math.max(0, a.hp); max += a.maxhp; }
     k = hp / max;
-    label = `arms: ${'|'.repeat(b.armsLeft)}`;
+    label = b.variant === 'colony' ? `bells: ${b.armsLeft}` : `arms: ${'|'.repeat(b.armsLeft)}`;
   } else {
     k = clamp(b.hp / b.maxhp, 0, 1);
-    label = 'the head';
+    label = b.variant === 'queen' ? 'the lamp' : b.variant === 'colony' ? 'the float' : 'the head';
   }
   ctx.strokeStyle = PAPER;
   ctx.lineWidth = 1;
@@ -816,7 +1033,7 @@ function drawBanner() {
 
 function buildMenuSchool() {
   menuSchool = [];
-  const kinds = ['jelly', 'jellyB', 'angler', 'jelly', 'urchin', 'jellyB', 'angler', 'jelly'];
+  const kinds = ['jelly', 'jellyB', 'angler', 'chain', 'urchin', 'jellyB', 'pyro', 'jelly', 'angler'];
   kinds.forEach(kind => {
     menuSchool.push({ kind, x: rand(View.W), y: rand(View.H), vy: rand(-26, -12), ph: rand(TAU), anim: rand(6), scale: rand(0.75, 1.15), seed: randi(0, 9) });
   });
@@ -967,8 +1184,8 @@ function dockItems() {
     cost: 6 + L * 4, ok: L < MAX_LEVEL,
     buy() { G.level++; },
   });
-  for (const k in WEAPONS) {
-    if (k === G.weapon) continue;
+  const others = Object.keys(WEAPONS).filter(k => k !== G.weapon);
+  for (const k of [others[G.wave % others.length], others[(G.wave + 2) % others.length]]) {
     items.push({
       name: `Swap to the ${WEAPONS[k].name}`, desc: `${WEAPONS[k].blurb[0].toUpperCase() + WEAPONS[k].blurb.slice(1)}. Keeps its grade.`,
       cost: 12, ok: true,

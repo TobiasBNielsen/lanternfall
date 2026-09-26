@@ -10,6 +10,9 @@ const WEAPONS = {
   harpoon: { name: 'harpoon', rate: 0.17, blurb: 'heavy bolts that go clean through a line of them' },
   sonar: { name: 'sonar ring', rate: 0.14, blurb: 'wide pings that fan out across the water' },
   bubble: { name: 'bubble gun', rate: 0.075, blurb: 'a quick, wobbly stream of stinging bubbles' },
+  flare: { name: 'flare gun', rate: 0.42, blurb: 'flares that stick, light up the dark, then burst' },
+  net: { name: 'net', rate: 0.55, blurb: 'a slow net that opens wide and tangles whatever it catches' },
+  coil: { name: 'galvanic coil', rate: 0.2, blurb: 'a spark that jumps from one creature to the next' },
 };
 
 const SEA_TYPES = {
@@ -17,6 +20,10 @@ const SEA_TYPES = {
   jellyB: { hp: 3, score: 120, r: 22, shot: 'spore' },
   angler: { hp: 2, score: 150, r: 22, shot: 'lure' },
   urchin: { hp: 8, score: 300, r: 26, shot: 'spines' },
+  chain: { hp: 2.5, score: 60, r: 15, shot: 'spore', slow: 2.2 },
+  hatchet: { hp: 1.5, score: 90, r: 16, shot: null },
+  gulper: { hp: 9, score: 400, r: 28, shot: 'gulp' },
+  pyro: { hp: 5, score: 150, r: 24, shot: null },
 };
 
 // The field book. Names are invented; the notes are what the diver phoned up to the ship.
@@ -27,7 +34,17 @@ const SPECIES = {
   urchin: { latin: 'Acanthosphaera errans', common: 'wandering thorn', note: 'Rolls through open water with no current to carry it. Throws its spines in threes.' },
   kraken: { latin: 'Teuthis magna', common: 'grandmother inkwell', note: 'Four arms, and the head is hard as the hull until every one is off.' },
   krakenOld: { latin: 'Teuthis antiqua', common: 'the old one', note: 'Six arms, covered in barnacles and old scars. Something has fought this one before.' },
+  chain: { latin: 'Physophora catena', common: 'chain colony', note: 'Not one animal but many, strung together. It comes apart one bell at a time.' },
+  hatchet: { latin: 'Argyrosoma securis', common: 'silver hatchet', note: 'Thin as a coin from the front. They come in pairs and they do not stop.' },
+  gulper: { latin: 'Saccognathus vorax', common: 'gulper', note: 'Mostly mouth. When it opens, the water goes in and we go with it. Shoot while it is open.' },
+  pyro: { latin: 'Pyrosoma lucerna', common: 'fire-tube', note: 'A tube of little lights. Break it and every piece carries on by itself.' },
+  queen: { latin: 'Lychnoceras regina', common: 'the lantern queen', note: 'She puts out every light but her own. Aim for the lamp, not the jaws.' },
+  colony: { latin: 'Physophora gigantea', common: 'the colony', note: 'Forty feet of it. Only the last bell can be cut, and the float waits for the end.' },
 };
+
+// Where a thing can be hit. Most things are hit where they are; a few keep their weak spot elsewhere.
+function hitX(e) { return e.hx !== undefined ? e.hx : e.x; }
+function hitY(e) { return e.hy !== undefined ? e.hy : e.y + (e.oy || 0); }
 
 // ---------------------------------------------------------------- particles & text
 
@@ -42,7 +59,7 @@ function spawnParticle(p) {
   p.rot = p.rot || 0;
   p.vr = p.vr || 0;
   p.alpha = p.alpha === undefined ? 1 : p.alpha;
-  p.layer = (p.kind === 'glow' && p.color === 'amber') || p.kind === 'ring' ? 'add' : 'normal';
+  p.layer = (p.kind === 'glow' && p.color === 'amber') || p.kind === 'ring' || p.kind === 'arc' ? 'add' : 'normal';
   G.particles.push(p);
 }
 
@@ -103,13 +120,28 @@ function fireWeapon(p) {
       const t = n === 1 ? 0 : i / (n - 1) - 0.5;
       addBullet(x + t * 10, y, t * spread, 820, 1.0 * mul, 'sonar', 12);
     }
-  } else {
+  } else if (w === 'bubble') {
     const n = [1, 1, 2, 2, 2, 3, 3, 4, 4, 5][L - 1];
     for (let i = 0; i < n; i++) {
       const t = i - (n - 1) / 2;
       const b = addBullet(x + t * 9, y, t * 0.05 + rand(-0.05, 0.05), 900, 0.72 * mul, 'bubble', 6);
       b.wob = rand(TAU);
     }
+  } else if (w === 'flare') {
+    const n = [1, 1, 1, 2, 2, 2, 3, 3, 3, 4][L - 1];
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0 : i / (n - 1) - 0.5;
+      const b = addBullet(x, y, t * 0.5, 720, 0.6 * mul, 'flare', 8);
+      b.life = 1.05; b.boom = 3.2 * mul; b.radius = 62 + L * 5;
+    }
+  } else if (w === 'net') {
+    const n = L >= 7 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const b = addBullet(x + (n > 1 ? (i - 0.5) * 30 : 0), y, n > 1 ? (i - 0.5) * 0.3 : 0, 520, 1.3 * mul, 'net', 10);
+      b.life = 0.5; b.span = 58 + L * 5; b.hold = 1.3 + L * 0.05; b.open = 0;
+    }
+  } else {
+    zapChain(p, L, mul);
   }
   p.muzzle = 0.06;
   Sound.sfx.shoot(w);
@@ -119,6 +151,41 @@ function addBullet(x, y, ang, speed, dmg, kind, r) {
   const b = { x, y, vx: Math.sin(ang) * speed, vy: -Math.cos(ang) * speed, ang, dmg, kind, r, dead: false, pierce: false };
   G.bullets.push(b);
   return b;
+}
+
+// The galvanic coil: find the nearest creature ahead, then let the spark jump on to its neighbours.
+function zapChain(p, L, mul) {
+  const jumps = 1 + Math.floor(L / 2);
+  const hit = [];
+  let fx = p.x, fy = p.y - 30, reach = 360, dmg = 1.7 * mul;
+  for (let j = 0; j <= jumps; j++) {
+    let best = null, bd = reach * reach;
+    for (const e of G.enemies) {
+      if (e.dead || e.hidden || hit.includes(e) || hitY(e) > fy + (j ? reach : 10)) continue;
+      const d = dist2(fx, fy, hitX(e), hitY(e));
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (!best) break;
+    const tx = hitX(best), ty = hitY(best);
+    spawnParticle({ kind: 'arc', x: fx, y: fy, x2: tx, y2: ty, life: 0.13, seed: rand(1000) });
+    hit.push(best);
+    damageEnemy(best, dmg, tx, ty, 'coil');
+    fx = tx; fy = ty; reach = 170; dmg *= 0.85;
+  }
+  if (!hit.length) spawnParticle({ kind: 'arc', x: fx, y: fy, x2: fx + rand(-30, 30), y2: fy - 120, life: 0.08, seed: rand(1000) });
+}
+
+// A flare going off: light, a ring, and damage to everything close.
+function flareBurst(b) {
+  spawnParticle({ kind: 'glow', color: 'amber', x: b.x, y: b.y, life: 0.5, size: b.radius * 3, grow: 0.2, alpha: 0.8 });
+  spawnParticle({ kind: 'ring', color: '#f2a93b', x: b.x, y: b.y, life: 0.4, r0: 6, r1: b.radius, width: 3 });
+  sparks(b.x, b.y, 'paper', 8, 220, 0.5, 12);
+  Sound.sfx.flare();
+  for (const e of G.enemies) {
+    if (e.dead || e.hidden) continue;
+    const rr = b.radius + e.r;
+    if (dist2(b.x, b.y, hitX(e), hitY(e)) < rr * rr) damageEnemy(e, b.boom, hitX(e), hitY(e), 'flare');
+  }
 }
 
 function playerHit(cause) {
@@ -168,8 +235,9 @@ function detonateSonar() {
   burst(m.x, m.y, 2.4, 'amber');
   for (const e of G.enemies) {
     if (e.dead || e.hidden) continue;
-    if (e.type === 'boss') { if (!e.armsLeft) damageEnemy(e, e.maxhp * 0.15, e.x, e.y, 'sonar'); }
+    if (e.type === 'boss') { if (!e.armsLeft) damageEnemy(e, e.maxhp * 0.15, hitX(e), hitY(e), 'sonar'); }
     else if (e.type === 'arm') damageEnemy(e, e.maxhp * 0.35, e.x, e.y, 'sonar');
+    else if (e.type === 'seg') { if (isTail(e)) damageEnemy(e, e.maxhp * 0.6, e.x, e.y, 'sonar'); }
     else killEnemy(e);
   }
   for (const s of G.shots) {
@@ -180,11 +248,14 @@ function detonateSonar() {
 
 // ---------------------------------------------------------------- enemies
 
-function makeCreature(kind, x, y) {
+function makeCreature(kind, x, y, tier = 2) {
   const T = SEA_TYPES[kind];
-  const hp = T.hp * G.hpMul;
+  // fire-tubes come in two sizes; the small ones are what is left when a big one breaks
+  const small = kind === 'pyro' && tier < 2;
+  const hp = (small ? 2 : T.hp) * G.hpMul;
   const e = {
-    type: 'sea', kind, x, y, r: T.r, hp, maxhp: hp, score: T.score,
+    type: 'sea', kind, x, y, r: small ? 15 : T.r, hp, maxhp: hp, score: small ? 60 : T.score, tier, scale: small ? 0.6 : 1,
+    open: 0, tangled: 0, boilSeed: randi(0, 9),
     anim: rand(6), animSpeed: kind === 'angler' ? rand(8, 11) : rand(3.5, 5), flash: 0, rot: 0, lastX: x,
     shotT: rand(1.5, 10) / G.shotMul, tell: 0, dead: false, hidden: false, move: null,
   };
@@ -219,23 +290,38 @@ function creatureAttack(e) {
     const v = 260 * sp;
     fireShot('spore', e.x + 18, e.y - 30, Math.cos(a) * v, Math.sin(a) * v);
     spawnParticle({ kind: 'glow', color: 'amber', x: e.x + 18, y: e.y - 35, life: 0.3, size: 60, grow: 0.3 });
-  } else {
+  } else if (T.shot === 'gulp') {
+    e.open = 2.4;
+    Sound.sfx.whoosh();
+  } else if (T.shot === 'spines') {
     for (const a of [-0.35, 0, 0.35]) fireShot('spine', e.x, e.y + 20, Math.sin(a) * 240 * sp, Math.cos(a) * 240 * sp);
   }
 }
 
+// Only the last bell of a colony can be cut.
+function isTail(seg) {
+  const segs = seg.boss.arms;
+  for (let i = segs.length - 1; i >= 0; i--) if (!segs[i].dead) return segs[i] === seg;
+  return false;
+}
+
 function damageEnemy(e, dmg, hx, hy, kind) {
   if (e.dead) return;
-  if (e.type === 'boss' && e.armsLeft > 0) {
-    // the head is shielded while any arm is still attached
+  // armour: a kraken's head while it has arms, a colony's float while it has bells,
+  // a gulper with its mouth shut, and any bell of the colony that is not the last one
+  const shielded = (e.type === 'boss' && e.armsLeft > 0) ||
+    (e.type === 'seg' && !isTail(e)) ||
+    (e.type === 'sea' && e.kind === 'gulper' && e.open <= 0);
+  if (shielded) {
     spawnParticle({ kind: 'glow', color: 'paper', x: hx, y: hy, life: 0.1, size: 18 });
     Sound.sfx.clink();
     return;
   }
   e.hp -= dmg;
-  e.flash = e.type === 'boss' || e.type === 'arm' ? 0.035 : 0.07;
+  const big = e.type === 'boss' || e.type === 'arm' || e.type === 'seg';
+  e.flash = big ? 0.035 : 0.07;
   spawnParticle({ kind: 'glow', color: 'amber', x: hx, y: hy, life: 0.12, size: 26, grow: 0.5 });
-  if (e.type === 'boss' || e.type === 'arm') Sound.sfx.bossHit(); else Sound.sfx.hit();
+  if (big) Sound.sfx.bossHit(); else Sound.sfx.hit();
   if (e.hp <= 0) killEnemy(e);
 }
 
@@ -251,9 +337,19 @@ function killEnemy(e) {
     G.hitStop = Math.max(G.hitStop, 0.035);
     logSpecies(e.kind);
     Sound.sfx.pop(e.kind);
-    if (e.kind === 'urchin') dropPearl(e.x, e.y, 3);
-    else if (chance(0.6)) dropPearl(e.x, e.y, 1);
+    if (e.kind === 'urchin' || e.kind === 'gulper') dropPearl(e.x, e.y, 3);
+    else if (chance(e.kind === 'chain' ? 0.4 : 0.6)) dropPearl(e.x, e.y, 1);
     if (chance(0.05)) dropAir(e.x, e.y);
+    if (e.kind === 'pyro' && e.tier > 1) {
+      // it breaks into three smaller tubes that scatter
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i - 1) * 1.1 + rand(-0.2, 0.2);
+        const c = makeCreature('pyro', e.x, e.y, 1);
+        c.vx = Math.cos(a) * 150; c.vy = Math.sin(a) * 150 + 40;
+        c.move = e.move;
+      }
+      Sound.sfx.pop('jellyB');
+    }
   } else if (e.type === 'wreck') {
     addScore(e.score);
     burst(e.x, e.y, e.r / 40);
@@ -275,6 +371,15 @@ function killEnemy(e) {
     G.shake = Math.max(G.shake, 12);
     for (let i = 0; i < 3; i++) dropPearl(e.x + rand(-20, 20), e.y, 1);
     floatText(e.x, e.y - 20, b.armsLeft ? `${b.armsLeft} arm${b.armsLeft > 1 ? 's' : ''} left` : 'the head is bare', '#f2a93b', 24, 1.4);
+  } else if (e.type === 'seg') {
+    const b = e.boss;
+    b.armsLeft--;
+    addScore(500);
+    burst(e.x, e.y, 1);
+    G.hitStop = 0.05;
+    Sound.sfx.sever();
+    dropPearl(e.x, e.y, 1);
+    if (!b.armsLeft) floatText(b.x, b.y - 40, 'the float is bare', '#f2a93b', 24, 1.4);
   } else if (e.type === 'boss') {
     bossDeath(e);
   }
@@ -284,7 +389,8 @@ function bossDeath(b) {
   G.boss = null;
   addScore(b.score);
   floatText(b.x, b.y - 40, '+' + b.score.toLocaleString('en-US'), '#f2a93b', 34, 2);
-  logSpecies(b.sprite);
+  logSpecies(b.species || b.sprite);
+  G.forceDark = 0;
   Sound.sfx.bossGroan();
   for (let i = 0; i < 10; i++) {
     G.timers.push({

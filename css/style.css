@@ -150,10 +150,10 @@ b { font-weight: 700; }
 
 .count { font-family: var(--type); font-style: normal; font-size: 13px; color: var(--paper-dim); margin-left: 8px; }
 
-.plate-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 14px; margin-top: 14px; }
+.plate-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 10px; margin-top: 14px; }
 .plate { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.plate canvas { width: 84px; height: 84px; }
-.plate figcaption { font-family: var(--fell); font-style: italic; font-size: 14px; text-align: center; line-height: 1.2; }
+.plate canvas { width: 70px; height: 70px; }
+.plate figcaption { font-family: var(--fell); font-style: italic; font-size: 13px; text-align: center; line-height: 1.15; }
 .plate.unknown figcaption { color: var(--paper-faint); font-family: var(--type); font-style: normal; font-size: 11px; }
 
 /* ------------------------------------------------------------ the deepest dives */
@@ -325,6 +325,7 @@ body.touch .sonar-btn { display: flex; }
   .stock-item.purse { display: none; }
   .hud-weapon { font-size: 18px; }
   .air-cells i { width: 8px; height: 8px; }
+  .plate-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .plate canvas { width: 72px; height: 72px; }
   .plate-toast { top: calc(84px + var(--safe-t)); right: 16px; }
   #hud.boss .hud-depth { display: none; }

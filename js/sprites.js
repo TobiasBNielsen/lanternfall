@@ -491,6 +491,13 @@ function drawPing(x) {
   penPath(x, arcPts(0, 16, 16, 16, Math.PI * 1.28, Math.PI * 1.72, 10), false, 0.2); x.stroke();
 }
 
+function drawFlare(x) {
+  x.fillStyle = AMBER;
+  x.beginPath(); x.ellipse(0, 0, 3.2, 7, 0, 0, TAU); x.fill();
+  x.fillStyle = PAPER;
+  x.beginPath(); x.arc(0, -3, 1.6, 0, TAU); x.fill();
+}
+
 function drawShotBubble(x) {
   x.strokeStyle = AMBER;
   x.lineWidth = 1.5;
@@ -549,6 +556,206 @@ function drawSpire(x, w, h, kelp) {
   }
 }
 
+// Physophora catena: one bell of a chain colony. The chain is stitched together at runtime.
+function drawChainBell(x, ph) {
+  const s = Math.sin(ph * TAU);
+  const w = 12 * (1 - s * 0.12), h = 14 * (1 + s * 0.1);
+  ink(x, 0.8, 0.7);
+  for (const tx of [-4, 4]) {
+    const pts = [];
+    for (let k = 0; k <= 5; k++) pts.push([tx + Math.sin(ph * TAU + k + tx) * (0.6 + k * 0.4), 6 + k * 3.2]);
+    penPath(x, pts, false, 0.2); x.stroke();
+  }
+  const bell = () => {
+    x.beginPath();
+    x.moveTo(-w, 6);
+    x.bezierCurveTo(-w * 1.15, -h * 0.7, w * 1.15, -h * 0.7, w, 6);
+    x.quadraticCurveTo(0, 2, -w, 6);
+    x.closePath();
+  };
+  x.fillStyle = WASH;
+  bell(); x.fill();
+  hatch(x, bell, [-w, -h, w * 2, h + 8], { from: 0.2, gap: 2.2 });
+  ink(x, 1.3);
+  bell(); x.stroke();
+  ink(x, 0.8, 0.7);
+  penPath(x, [[-w * 0.5, 3], [0, -h * 0.3], [w * 0.5, 3]], false, 0.2); x.stroke();
+}
+
+// The float at the front of the giant colony: a gas bladder tipped with light.
+function drawColonyHead(x, ph) {
+  const s = Math.sin(ph * TAU);
+  const float = () => { x.beginPath(); x.ellipse(0, -6, 15, 27 * (1 + s * 0.04), 0, 0, TAU); };
+  x.fillStyle = DEEP;
+  float(); x.fill();
+  hatch(x, float, [-15, -34, 30, 56], { from: 0.1, gap: 2.2 });
+  ink(x, 0.8, 0.6);
+  for (let k = -3; k <= 3; k++) { penPath(x, [[-13, -6 + k * 6], [13, -6 + k * 6 + 2]], false, 0.3); x.stroke(); }
+  ink(x, 1.8);
+  float(); x.stroke();
+  // a skirt of small bells around the base
+  for (let i = 0; i < 5; i++) {
+    const a = Math.PI * (0.15 + (i / 4) * 0.7);
+    x.save();
+    x.translate(Math.cos(a) * 18, 18 + Math.sin(a) * 6);
+    x.scale(0.7, 0.7);
+    drawChainBell(x, (ph + i * 0.2) % 1);
+    x.restore();
+  }
+  x.fillStyle = AMBER;
+  x.beginPath(); x.arc(0, -34, 4, 0, TAU); x.fill();
+}
+
+// Argyrosoma securis: a silver hatchet seen side-on, facing right. Lights along the keel.
+function drawHatchet(x, ph) {
+  const s = Math.sin(ph * TAU);
+  const body = () => {
+    x.beginPath();
+    x.moveTo(18, -6);
+    x.lineTo(8, -12);
+    x.lineTo(-6, -10);
+    x.lineTo(-18, -3 + s);
+    x.lineTo(-18, 2 + s);
+    x.lineTo(-6, 6);
+    x.quadraticCurveTo(4, 20, 14, 8);
+    x.closePath();
+  };
+  ink(x, 1.1);
+  penPath(x, [[-18, -1 + s], [-27, -8 + s * 3], [-25, 0 + s], [-27, 8 + s * 3], [-18, 1 + s]], true, 0.3); x.stroke();
+  x.fillStyle = 'rgba(232,238,230,0.16)';
+  body(); x.fill();
+  hatch(x, body, [-18, -12, 36, 32], { from: 0, gap: 2, angle: -1.2 });
+  ink(x, 1.5);
+  body(); x.stroke();
+  // the huge upward-looking eye
+  x.fillStyle = DEEP;
+  x.beginPath(); x.arc(9, -5, 4.2, 0, TAU); x.fill();
+  ink(x, 1.2);
+  penCircle(x, 9, -5, 4.2, 0.2);
+  x.fillStyle = PAPER;
+  x.beginPath(); x.arc(9.5, -6.5, 1.5, 0, TAU); x.fill();
+  x.fillStyle = AMBER;
+  for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(-3 + i * 2.8, 7 + Math.sin(i / 5 * Math.PI) * 4.5, 1, 0, TAU); x.fill(); }
+}
+
+// Saccognathus vorax: almost all mouth, with a whip tail tipped with light.
+function drawGulper(x, ph, o) {
+  const s = Math.sin(ph * TAU);
+  ink(x, 1.1);
+  const tail = [];
+  for (let k = 0; k <= 16; k++) tail.push([Math.sin(ph * TAU + k * 0.5) * (1 + k * 0.6), 18 + k * 3.4]);
+  penPath(x, tail, false, 0.2); x.stroke();
+  x.fillStyle = AMBER;
+  x.beginPath(); x.arc(tail[16][0], tail[16][1] + 2, 2.6, 0, TAU); x.fill();
+  const head = () => { x.beginPath(); x.ellipse(0, -4, 30, o.open ? 34 : 22, 0, 0, TAU); };
+  x.fillStyle = 'rgba(11,29,68,0.7)';
+  head(); x.fill();
+  hatch(x, head, [-30, -38, 60, 70], { from: 0.2, gap: 2.4 });
+  ink(x, 1.8);
+  head(); x.stroke();
+  if (o.open) {
+    // the mouth, a black hole with a ring of needle teeth
+    x.fillStyle = '#050c1e';
+    x.beginPath(); x.ellipse(0, 2, 24, 27 + s * 1.5, 0, 0, TAU); x.fill();
+    ink(x, 1.2);
+    penPath(x, arcPts(0, 2, 24, 27 + s * 1.5, 0, TAU + 0.2, 26), false, 0.3); x.stroke();
+    x.fillStyle = PAPER;
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU;
+      const bx = Math.cos(a) * 24, by = 2 + Math.sin(a) * 27;
+      const ix = -Math.cos(a) * 5, iy = -Math.sin(a) * 5;
+      x.beginPath(); x.moveTo(bx - iy * 0.25, by + ix * 0.25); x.lineTo(bx + ix, by + iy); x.lineTo(bx + iy * 0.25, by - ix * 0.25); x.fill();
+    }
+  } else {
+    ink(x, 1.5);
+    penPath(x, [[-24, 2], [-10, 6 + s], [0, 7 + s], [10, 6 + s], [24, 2]], false, 0.3); x.stroke();
+  }
+  // two pin-prick eyes at the very top
+  x.fillStyle = PAPER;
+  for (const side of [-1, 1]) { x.beginPath(); x.arc(side * 7, o.open ? -32 : -19, 1.6, 0, TAU); x.fill(); }
+}
+
+// Pyrosoma lucerna: a tube built of tiny glowing animals.
+function drawPyro(x, ph) {
+  const s = Math.sin(ph * TAU);
+  const tube = () => {
+    x.beginPath();
+    x.moveTo(-11, 22);
+    x.bezierCurveTo(-14, 0, -12, -24, 0, -27);
+    x.bezierCurveTo(12, -24, 14, 0, 11, 22);
+    x.closePath();
+  };
+  x.fillStyle = 'rgba(11,29,68,0.55)';
+  tube(); x.fill();
+  hatch(x, tube, [-14, -28, 28, 52], { from: 0.25, gap: 2.2 });
+  x.fillStyle = AMBER;
+  for (let row = 0; row < 8; row++) {
+    for (let k = 0; k < 4; k++) {
+      const yy = -20 + row * 5.5, xx = -8 + k * 5.3 + (row % 2) * 2.6;
+      if (Math.abs(xx) > 10.5 - (row === 0 ? 4 : 0)) continue;
+      const glow = 0.55 + 0.45 * Math.sin(ph * TAU + row * 0.9 + k);
+      x.globalAlpha = glow;
+      x.beginPath(); x.arc(xx, yy, 1.2, 0, TAU); x.fill();
+    }
+  }
+  x.globalAlpha = 1;
+  ink(x, 1.6);
+  tube(); x.stroke();
+  ink(x, 1.2);
+  x.beginPath(); x.ellipse(0, 22, 11, 3 + s * 0.6, 0, 0, TAU); x.stroke();
+}
+
+// Lychnoceras regina: the lantern queen. Her stalk and lamp are drawn live so they can sway.
+function drawQueen(x, ph) {
+  const s = Math.sin(ph * TAU);
+  const body = () => {
+    x.beginPath();
+    const n = 30;
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * TAU;
+      const r = 78 + Math.sin(a * 4 + 1) * 4 + Math.cos(a * 7) * 2.5;
+      const px = Math.cos(a) * r * 1.08, py = Math.sin(a) * r * 0.9 - 6;
+      if (i) x.lineTo(px, py); else x.moveTo(px, py);
+    }
+    x.closePath();
+  };
+  ink(x, 1.6, 0.9);
+  for (const side of [-1, 1]) {
+    penPath(x, [[side * 76, -20], [side * (110 + s * 6), -46 + s * 5], [side * (100 + s * 4), -20], [side * (116 + s * 4), 4], [side * (98 + s * 3), 12], [side * 76, 14]], false, 0.8);
+    x.stroke();
+  }
+  x.fillStyle = 'rgba(11,29,68,0.75)';
+  body(); x.fill();
+  hatch(x, body, [-86, -80, 172, 150], { from: -0.1, gap: 3, width: 0.9 });
+  hatch(x, body, [-86, -80, 172, 150], { from: 0.45, gap: 1.6, width: 0.7 });
+  stipple(x, body, [-86, -80, 172, 70], 120, 1, 0.55);
+  ink(x, 2.4);
+  body(); x.stroke();
+  x.fillStyle = '#050c1e';
+  x.beginPath(); x.moveTo(-64, 14); x.quadraticCurveTo(0, 96 + s * 4, 64, 14); x.quadraticCurveTo(0, 42, -64, 14); x.fill();
+  ink(x, 2);
+  penPath(x, [[-64, 14], [-32, 62 + s * 2], [0, 74 + s * 3], [32, 62 + s * 2], [64, 14]], false, 0.7); x.stroke();
+  x.fillStyle = PAPER;
+  for (let i = 0; i < 13; i++) {
+    const tx = -54 + i * 9 + jit(1), ty = 20 + Math.sin((i / 12) * Math.PI) * 18;
+    const len = 9 + ((i * 5) % 7);
+    x.beginPath(); x.moveTo(tx - 2.6, ty); x.lineTo(tx + jit(1.5), ty + len); x.lineTo(tx + 2.6, ty); x.fill();
+  }
+  // one old eye, one smaller and clouded
+  x.fillStyle = DEEP;
+  x.beginPath(); x.arc(-32, -30, 12, 0, TAU); x.fill();
+  ink(x, 1.8);
+  penCircle(x, -32, -30, 12, 0.4);
+  x.fillStyle = AMBER;
+  x.beginPath(); x.arc(-30, -29, 5, 0, TAU); x.fill();
+  x.fillStyle = DEEP;
+  x.beginPath(); x.ellipse(-30, -29, 1.6, 4.4, 0, 0, TAU); x.fill();
+  ink(x, 1.3, 0.8);
+  penCircle(x, 30, -38, 6, 0.3);
+  x.fillStyle = 'rgba(232,238,230,0.5)';
+  x.beginPath(); x.arc(30, -38, 4, 0, TAU); x.fill();
+}
+
 function urchinOpts() {
   const len = [], twist = [];
   for (let i = 0; i < 26; i++) { len.push(rand(24, 40)); twist.push(rand(-0.08, 0.08)); }
@@ -571,6 +778,14 @@ Sprites.init = function () {
       spots: [[-34, -62, 9], [26, -80, 7], [40, -36, 5], [-12, -40, 4]],
       scars: [[[-50, -60], [-20, -30]], [[-46, -64], [-18, -36]], [[30, -20], [55, -48]]],
     }, 4),
+    chain: buildSet(40, 46, drawChainBell, {}),
+    hatchet: buildSet(64, 44, drawHatchet, {}, 4),
+    gulper: buildSet(110, 140, drawGulper, { open: false }, 4),
+    gulperOpen: buildSet(110, 140, drawGulper, { open: true }, 4),
+    pyro: buildSet(50, 64, drawPyro, {}),
+    queen: buildSet(260, 220, drawQueen, {}, 4),
+    colony: buildSet(80, 90, drawColonyHead, {}, 4),
+    colonySeg: buildSet(64, 72, (x, ph) => { x.scale(1.6, 1.6); drawChainBell(x, ph); }, {}, 4),
   };
   S.sphere = makeSprite(64, 72, drawSphere);
   S.spore = makeSprite(20, 20, drawSpore);
@@ -599,6 +814,7 @@ Sprites.init = function () {
     harpoon: makeSprite(12, 36, drawHarpoon),
     sonar: makeSprite(40, 24, drawPing),
     bubble: makeSprite(12, 12, drawShotBubble),
+    flare: makeSprite(10, 18, drawFlare),
   };
 
   S.spires = [

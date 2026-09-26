@@ -89,9 +89,25 @@ const Sound = (() => {
         tone({ type: 'triangle', f: 300, f2: 120, dur: 0.08, vol: 0.05 });
       } else if (w === 'sonar') {
         tone({ type: 'sine', f: 1500, f2: 900, dur: 0.12, vol: 0.045 });
-      } else {
+      } else if (w === 'bubble') {
         tone({ type: 'sine', f: rand(380, 520), f2: 900, dur: 0.05, vol: 0.04 });
+      } else if (w === 'flare') {
+        noise({ dur: 0.18, vol: 0.08, filter: 'bandpass', f: 900, f2: 2400, q: 1 });
+      } else if (w === 'net') {
+        noise({ dur: 0.25, vol: 0.07, filter: 'lowpass', f: 700, f2: 300 });
+      } else {
+        noise({ dur: 0.09, vol: 0.09, filter: 'highpass', f: 3000 });
+        tone({ type: 'square', f: rand(90, 140), dur: 0.08, vol: 0.05, filter: 'lowpass', ff: 1200 });
       }
+    },
+    flare() {
+      if (!ctx || !throttle('flare', 60)) return;
+      noise({ dur: 0.35, vol: 0.18, filter: 'lowpass', f: 1800, f2: 200 });
+      tone({ type: 'sine', f: 180, f2: 60, dur: 0.3, vol: 0.14 });
+    },
+    net() {
+      if (!ctx || !throttle('net', 80)) return;
+      noise({ dur: 0.3, vol: 0.08, filter: 'bandpass', f: 1400, f2: 600, q: 2 });
     },
     hit() {
       if (!ctx || !throttle('hit', 45)) return;
