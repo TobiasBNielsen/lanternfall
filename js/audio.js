@@ -2,7 +2,7 @@
 
 // All sound is synthesized with the Web Audio API - no audio files needed.
 const Sound = (() => {
-  let ctx = null, master, sfxBus, musicBus, noiseBuf;
+  let ctx = null, master, sfxBus, musicBus, noiseBuf, water, waterF = 0;
   const settings = { sfx: Store.get('lf_sfx', true), music: Store.get('lf_music', true) };
   const last = {};
   const SFX_VOL = 0.55, MUSIC_VOL = 0.3;
@@ -19,7 +19,10 @@ const Sound = (() => {
     comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 4;
     comp.attack.value = 0.003; comp.release.value = 0.25;
     master = ctx.createGain(); master.gain.value = 0.9;
-    master.connect(comp); comp.connect(ctx.destination);
+    // everything is heard through water: the deeper, the more muffled
+    water = ctx.createBiquadFilter();
+    water.type = 'lowpass'; water.frequency.value = 5000; water.Q.value = 0.6;
+    master.connect(water); water.connect(comp); comp.connect(ctx.destination);
     sfxBus = ctx.createGain(); sfxBus.gain.value = settings.sfx ? SFX_VOL : 0; sfxBus.connect(master);
     musicBus = ctx.createGain(); musicBus.gain.value = settings.music ? MUSIC_VOL : 0; musicBus.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -198,6 +201,20 @@ const Sound = (() => {
       if (!ctx) return;
       tone({ type: 'sine', f: 720, f2: 900, dur: 0.05, vol: 0.05 });
     },
+    // steel under pressure: a slow, uneven groan
+    creak() {
+      if (!ctx) return;
+      const f = rand(55, 85);
+      tone({ type: 'sawtooth', f, f2: f * rand(1.2, 1.6), dur: rand(0.8, 1.4), vol: 0.07, filter: 'bandpass', ff: 320, q: 6, attack: 0.25 });
+      tone({ type: 'sawtooth', f: f * 1.5, f2: f * 1.3, dur: 0.6, vol: 0.04, filter: 'bandpass', ff: 500, q: 8, attack: 0.1, delay: 0.5 });
+    },
+    // a pencil scratching a new entry into the book
+    logged() {
+      if (!ctx) return;
+      for (let i = 0; i < 5; i++) noise({ dur: rand(0.05, 0.11), vol: 0.06, filter: 'bandpass', f: rand(2500, 4200), q: 3, delay: i * 0.09 + rand(0, 0.03) });
+      tone({ type: 'triangle', f: 660, dur: 0.3, vol: 0.05, delay: 0.5 });
+      tone({ type: 'triangle', f: 990, dur: 0.4, vol: 0.04, delay: 0.62 });
+    },
   };
 
   // Small step sequencer with look-ahead scheduling.
@@ -253,5 +270,11 @@ const Sound = (() => {
   function suspend() { if (ctx && ctx.state === 'running') ctx.suspend(); }
   function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
 
-  return { init, sfx, Music, settings, setSfx, setMusic, suspend, resume };
+  function setDepth(d) {
+    if (!water) return;
+    const f = Math.round(lerp(5000, 1100, clamp(d / 8000, 0, 1)) / 50) * 50;
+    if (f !== waterF) { waterF = f; water.frequency.setTargetAtTime(f, ctx.currentTime, 0.6); }
+  }
+
+  return { init, sfx, Music, settings, setSfx, setMusic, setDepth, suspend, resume };
 })();

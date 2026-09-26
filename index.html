@@ -4,154 +4,136 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Lanternfall</title>
-  <meta name="description" content="A deep-sea shooter. Take a little yellow sub down through glowing jellies, anglerfish and a kraken, and see how deep you get before the air runs out.">
-  <meta name="theme-color" content="#06121c">
+  <meta name="description" content="A deep-sea shooter drawn like a 1930s cyanotype. Take a steel sphere down past the sunlight, log what lives there, and see how deep you get before the air runs out.">
+  <meta name="theme-color" content="#20478c">
   <meta property="og:title" content="Lanternfall">
-  <meta property="og:description" content="Something down there is glowing. Go and see how deep it goes.">
+  <meta property="og:description" content="Notes from a descent. A deep-sea shooter drawn like an old cyanotype.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Shrikhand&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <canvas id="game"></canvas>
 
-  <!-- HUD -->
+  <!-- HUD: typed straight onto the water, no boxes -->
   <div id="hud" class="hidden">
     <div class="hud-top">
-      <div class="chip score-chip">
-        <span class="chip-label">Score</span>
-        <span id="score" class="score">0</span>
-      </div>
-      <div class="chip depth-chip"><span id="depthLabel">200 m</span></div>
+      <p class="hud-score"><span id="score">0</span> points</p>
+      <p class="hud-depth" id="depthLabel">400 ft</p>
       <div class="hud-right">
-        <div class="chip stock">
-          <div id="hull" class="icons hull" title="Hull"></div>
-          <div id="sonarIcons" class="icons sonars" title="Sonar charges"></div>
-          <div class="purse" title="Pearls"><i class="pearl"></i><span id="pearls">0</span></div>
-        </div>
-        <button id="pauseBtn" class="chip square-btn" aria-label="Pause">
-          <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
-        </button>
+        <p class="hud-stock">
+          <span class="stock-item" title="Hull plates">hull <span id="hull" class="marks hull"></span></span>
+          <span class="stock-item" title="Sonar charges">sonar <span id="sonarIcons" class="marks sonars"></span></span>
+          <span class="stock-item purse" title="Pearls"><i class="pearl"></i><span id="pearls">0</span></span>
+        </p>
+        <button id="pauseBtn" class="pause-btn" aria-label="Pause">&#8214;</button>
       </div>
     </div>
 
-    <div id="weaponBox" class="chip weapon">
-      <div class="weapon-name" id="weaponName">Harpoon</div>
-      <div class="row"><span class="mini">PWR</span><div id="pips" class="cells"></div></div>
-      <div id="o2Box" class="row o2"><span class="mini">O&#8322;</span><div class="o2-track"><div id="o2Fill" class="o2-fill"></div></div></div>
+    <div class="hud-bottom">
+      <p class="hud-weapon"><span id="weaponName">harpoon</span>, <span id="grade">grade I</span></p>
+      <p id="o2Box" class="hud-air">air <span id="o2Cells" class="air-cells"></span></p>
     </div>
 
     <button id="sonarBtn" class="sonar-btn" aria-label="Fire a sonar blast">
-      <span class="sonar-label">SONAR</span>
-      <span id="sonarCount">1</span>
+      <span>sonar</span>
+      <b id="sonarCount">1</b>
     </button>
   </div>
 
-  <!-- Title screen -->
+  <!-- A plate for the field book, shown the first time a species is taken -->
+  <aside id="plateToast" class="plate-toast hidden" aria-live="polite">
+    <canvas id="toastCanvas"></canvas>
+    <div>
+      <p class="toast-head">New entry in the book</p>
+      <p class="latin" id="toastLatin"></p>
+      <p class="common" id="toastCommon"></p>
+      <p class="toast-note" id="toastNote"></p>
+    </div>
+  </aside>
+
+  <!-- Title page -->
   <div id="menu" class="screen menu">
-    <div class="menu-grid">
+    <div class="title-page">
       <header class="masthead">
-        <p class="issue">Dive log no. 07 &middot; destination: down</p>
-        <h1 class="logo" aria-label="Lanternfall">
-          <span class="w1">Lantern</span>
-          <span class="w2">fall</span>
-        </h1>
-        <p class="lede">Something down there is glowing, and it's rising to meet you. Take the little yellow sub, a harpoon and one tank of air, and find out how deep it goes.</p>
-        <div class="launch-row">
-          <button id="playBtn" class="launch">Dive <span aria-hidden="true">&darr;</span></button>
-          <div class="stamp">
-            <span>Best</span>
-            <strong id="bestScore">0</strong>
-            <span><b id="bestDepth">0</b> m</span>
-          </div>
-        </div>
+        <p class="overline">Notes from a descent, 1934</p>
+        <h1 class="logo">Lanternfall</h1>
+        <p class="lede">The ship lowers us at noon. Below six hundred feet the sunlight gives out, and after that the only light is whatever the animals make themselves. We have a harpoon, a lamp, and one tank of air.</p>
+        <p class="record" id="record">No dives in the log yet.</p>
+        <button id="playBtn" class="begin">Begin the descent <span aria-hidden="true">&darr;</span></button>
       </header>
 
-      <aside class="brief">
-        <span class="tape" aria-hidden="true"></span>
-        <h2>Diver's manual</h2>
-        <ol class="manual desktop-only">
-          <li><span>Steer</span><span><kbd>mouse</kbd> or <kbd>WASD</kbd></span></li>
-          <li><span>Fire</span><span>hold <kbd>click</kbd> or <kbd>space</kbd></span></li>
-          <li><span>Sonar blast</span><span><kbd>right-click</kbd> or <kbd>M</kbd></span></li>
-          <li><span>Hold depth</span><span><kbd>P</kbd></span></li>
-        </ol>
-        <ol class="manual touch-only">
-          <li><span>Steer</span><span>drag anywhere</span></li>
-          <li><span>Fire</span><span>automatic while touching</span></li>
-          <li><span>Sonar blast</span><span>the red button</span></li>
-        </ol>
+      <section class="notes">
+        <h2>Handling the sphere</h2>
+        <dl class="handling desktop-only">
+          <dt>Steer</dt><dd>mouse, or WASD</dd>
+          <dt>Fire</dt><dd>hold the mouse button, or space</dd>
+          <dt>Sonar blast</dt><dd>right-click, or M</dd>
+          <dt>Hold depth</dt><dd>P</dd>
+        </dl>
+        <dl class="handling touch-only">
+          <dt>Steer</dt><dd>drag anywhere</dd>
+          <dt>Fire</dt><dd>automatic while you touch</dd>
+          <dt>Sonar blast</dt><dd>the round button</dd>
+        </dl>
 
-        <h2>How it works</h2>
-        <ul class="rules">
-          <li><i class="bubble-ico"></i><span><b>Air runs out.</b> Grab the bubbles rising from below, or the sea takes a hull plate.</span></li>
-          <li><i class="pearl"></i><span><b>Pearls</b> fall from whatever you hit. Spend them at the dock between dives.</span></li>
-          <li><i class="plate"></i><span><b>Get hit</b> and you lose a plate, and half your pearls spill out. Catch them fast.</span></li>
-          <li><i class="arm-ico"></i><span><b>Krakens</b> can't be hurt until every arm is gone.</span></li>
-        </ul>
+        <h2>Things to remember</h2>
+        <p class="prose">The air runs down while you fight. Catch the bubbles that come up from the vents, or the sea takes a hull plate. Whatever you hit drops pearls, and the ship will trade supplies for them between dives. If you are hit, half your pearls spill out; they sink slowly, so go after them. The big ones cannot be hurt until their arms are gone.</p>
 
         <div class="switches">
-          <button class="switch" data-toggle="sfx">sound <span class="state">on</span></button>
-          <button class="switch" data-toggle="music">music <span class="state">on</span></button>
+          <button class="switch" data-toggle="sfx">sound: <span class="state">on</span></button>
+          <button class="switch" data-toggle="music">music: <span class="state">on</span></button>
         </div>
-      </aside>
+      </section>
+
+      <section class="book">
+        <h2>The field book <span class="count" id="speciesCount">0 of 6</span></h2>
+        <div id="plateGrid" class="plate-grid"></div>
+      </section>
     </div>
-    <footer>Every creature here is made of code. Several of them are still angry about it.</footer>
   </div>
 
   <!-- Pause -->
   <div id="pause" class="screen hidden">
-    <div class="ticket">
-      <p class="issue">Holding depth</p>
-      <h2>Paused</h2>
-      <button id="resumeBtn" class="launch small">Resume</button>
-      <div class="plain-row">
-        <button id="restartBtn" class="plain">Restart</button>
+    <div class="sheet">
+      <h2>Holding at <span id="pauseDepth">0</span> ft</h2>
+      <p class="prose">The winch is stopped. Nothing out there is moving either.</p>
+      <div class="actions">
+        <button id="resumeBtn" class="begin small">Carry on</button>
+        <button id="restartBtn" class="plain">Start over</button>
         <button id="quitBtn" class="plain">Surface</button>
       </div>
       <div class="switches">
-        <button class="switch" data-toggle="sfx">sound <span class="state">on</span></button>
-        <button class="switch" data-toggle="music">music <span class="state">on</span></button>
+        <button class="switch" data-toggle="sfx">sound: <span class="state">on</span></button>
+        <button class="switch" data-toggle="music">music: <span class="state">on</span></button>
       </div>
     </div>
   </div>
 
-  <!-- The dock between waves -->
+  <!-- Supplies lowered from the ship between waves -->
   <div id="dock" class="screen hidden">
-    <div class="dock-card">
-      <div class="dock-head">
-        <div>
-          <p class="issue">Docked at <span id="dockDepth">200 m</span> &middot; air topped up</p>
-          <h2>The Dock</h2>
-        </div>
-        <p class="purse big"><i class="pearl"></i><b id="dockPearls">0</b></p>
-      </div>
+    <div class="sheet dock-sheet">
+      <p class="overline">Stopped at <span id="dockDepth">400</span> ft. The ship has topped up the air.</p>
+      <h2>Supplies from the ship</h2>
+      <p class="purse-line">In the basket: <i class="pearl"></i><b id="dockPearls">0</b> pearls</p>
       <div id="dockItems" class="shop"></div>
-      <button id="diveBtn" class="launch small">Dive deeper <span aria-hidden="true">&darr;</span></button>
+      <button id="diveBtn" class="begin small">Go deeper <span aria-hidden="true">&darr;</span></button>
     </div>
   </div>
 
-  <!-- Game over: the dive log -->
+  <!-- The last entry -->
   <div id="gameover" class="screen hidden">
-    <div class="go-wrap">
-      <h2 class="go-title">Lights out.</h2>
-      <div class="receipt">
-        <p class="r-head">DIVE LOG &middot; No. <span id="goDive">000</span></p>
-        <p class="r-sub">last seen: <span id="goZone">Sunlight Zone</span></p>
-        <div class="r-line"><span>Deepest point</span><span id="goDepth">0 m</span></div>
-        <div class="r-line"><span>Creatures zapped</span><span id="goKills">0</span></div>
-        <div class="r-line"><span>Pearls found</span><span id="goPearls">0</span></div>
-        <div class="r-sep"></div>
-        <div class="r-line total"><span>SCORE</span><span id="goScore">0</span></div>
-        <div class="r-line"><span>Best dive</span><span id="goBest">0</span></div>
-        <div id="newRecord" class="r-stamp">New record</div>
-        <p class="r-foot">The sub was not recovered.<br>A new one is ready.</p>
-      </div>
-      <div class="go-actions">
-        <button id="againBtn" class="launch small">Dive again</button>
-        <button id="goMenuBtn" class="plain">Title screen</button>
+    <div class="sheet last-entry">
+      <p class="overline">Last entry</p>
+      <h2>The line went quiet at <span id="goDepth">0</span> ft.</h2>
+      <p class="prose">That is <span id="goZone">sunlit water</span>. Before the telephone cut out we had taken <b id="goKills">0</b> of them and brought up <b id="goPearls">0</b> pearls. The field book has <b id="goSpecies">0 of 6</b> species in it.</p>
+      <p class="score-line">Score for the dive: <b id="goScore">0</b></p>
+      <p class="prose small" id="goBest"></p>
+      <div class="actions">
+        <button id="againBtn" class="begin small">Send down another sphere</button>
+        <button id="goMenuBtn" class="plain">Back to the title page</button>
       </div>
     </div>
   </div>

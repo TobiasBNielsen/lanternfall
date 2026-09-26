@@ -7,16 +7,26 @@ const MAX_LEVEL = 10;
 const MAX_HULL = 5;
 const MAX_SONAR = 5;
 const WEAPONS = {
-  harpoon: { name: 'Harpoon', color: '#ffb347', glow: 'orange', rate: 0.17, blurb: 'Heavy bolts that skewer a whole line' },
-  sonar: { name: 'Sonar Ring', color: '#4de1ff', glow: 'cyan', rate: 0.14, blurb: 'Wide pings that fan out across the water' },
-  bubble: { name: 'Bubble Gun', color: '#7dffb0', glow: 'green', rate: 0.075, blurb: 'A fast, wobbly stream of stinging bubbles' },
+  harpoon: { name: 'harpoon', rate: 0.17, blurb: 'heavy bolts that go clean through a line of them' },
+  sonar: { name: 'sonar ring', rate: 0.14, blurb: 'wide pings that fan out across the water' },
+  bubble: { name: 'bubble gun', rate: 0.075, blurb: 'a quick, wobbly stream of stinging bubbles' },
 };
 
 const SEA_TYPES = {
-  jelly: { hp: 3, score: 100, r: 22, glow: 'pink', shot: 'spore' },
-  jellyB: { hp: 3, score: 120, r: 22, glow: 'cyan', shot: 'spore' },
-  angler: { hp: 2, score: 150, r: 22, glow: 'amber', shot: 'lure' },
-  urchin: { hp: 8, score: 300, r: 26, glow: 'purple', shot: 'spines' },
+  jelly: { hp: 3, score: 100, r: 22, shot: 'spore' },
+  jellyB: { hp: 3, score: 120, r: 22, shot: 'spore' },
+  angler: { hp: 2, score: 150, r: 22, shot: 'lure' },
+  urchin: { hp: 8, score: 300, r: 26, shot: 'spines' },
+};
+
+// The field book. Names are invented; the notes are what the diver phoned up to the ship.
+const SPECIES = {
+  jelly: { latin: 'Rhodomedusa ternaria', common: 'saucer jelly', note: 'Pulses in threes, then rests. Drops something that stings when it passes over the window.' },
+  jellyB: { latin: 'Glaucomedusa pallida', common: 'bell jelly', note: 'Tall and nearly clear. The threads hanging off it are longer than the sphere is wide.' },
+  angler: { latin: 'Lychnoceras beebei', common: 'lamp-horn', note: 'Its light flickers twice before it spits. Watch the light, not the fish.' },
+  urchin: { latin: 'Acanthosphaera errans', common: 'wandering thorn', note: 'Rolls through open water with no current to carry it. Throws its spines in threes.' },
+  kraken: { latin: 'Teuthis magna', common: 'grandmother inkwell', note: 'Four arms, and the head is hard as the hull until every one is off.' },
+  krakenOld: { latin: 'Teuthis antiqua', common: 'the old one', note: 'Six arms, covered in barnacles and old scars. Something has fought this one before.' },
 };
 
 // ---------------------------------------------------------------- particles & text
@@ -32,7 +42,7 @@ function spawnParticle(p) {
   p.rot = p.rot || 0;
   p.vr = p.vr || 0;
   p.alpha = p.alpha === undefined ? 1 : p.alpha;
-  p.layer = p.kind === 'glow' || p.kind === 'ring' ? 'add' : 'normal';
+  p.layer = (p.kind === 'glow' && p.color === 'amber') || p.kind === 'ring' ? 'add' : 'normal';
   G.particles.push(p);
 }
 
@@ -56,12 +66,12 @@ function inkCloud(x, y, s = 1) {
   }
 }
 
-function burst(x, y, s = 1, color = 'cyan') {
-  spawnParticle({ kind: 'glow', color: 'white', x, y, life: 0.22, size: 100 * s, grow: 0.4 });
-  spawnParticle({ kind: 'glow', color, x, y, life: 0.45, size: 140 * s, grow: 0.2, alpha: 0.8 });
-  sparks(x, y, color, Math.round(10 * Math.sqrt(s)), 300 * Math.sqrt(s), 0.7, 18 * Math.sqrt(s));
+// A burst is drawn like an engraving of one: a ring, a spray of dots and bubbles. Only lamps glow.
+function burst(x, y, s = 1, color = 'paper') {
+  if (color === 'amber') spawnParticle({ kind: 'glow', color: 'amber', x, y, life: 0.4, size: 130 * s, grow: 0.2, alpha: 0.7 });
+  sparks(x, y, 'paper', Math.round(12 * Math.sqrt(s)), 300 * Math.sqrt(s), 0.7, 18 * Math.sqrt(s));
   bubbles(x, y, Math.round(10 * s), 16 * s);
-  spawnParticle({ kind: 'ring', color: '#bff4ff', x, y, life: 0.5, r0: 8 * s, r1: 90 * s, width: 5 });
+  spawnParticle({ kind: 'ring', color: '#e8eee6', x, y, life: 0.5, r0: 8 * s, r1: 90 * s, width: 3, dash: true });
 }
 
 function floatText(x, y, text, color = '#ffffff', size = 20, life = 1.1) {
@@ -116,6 +126,7 @@ function playerHit(cause) {
   if (!p.alive || p.invuln > 0) return;
   p.alive = false;
   burst(p.x, p.y, 2, 'amber');
+  G.hitStop = 0.12;
   inkCloud(p.x, p.y, 0.8);
   Sound.sfx.playerDie();
   G.shake = 20;
@@ -130,9 +141,9 @@ function playerHit(cause) {
       const v = Math.floor(lost / n) + (i < lost % n ? 1 : 0);
       G.pickups.push({ type: 'pearl', value: v, x: p.x, y: p.y, vx: rand(-160, 160), vy: rand(-260, -80), r: 12, rot: 0, dead: false, spilled: true });
     }
-    floatText(p.x, p.y - 40, `-${lost} pearls`, '#f3e6f5', 18, 1.4);
+    floatText(p.x, p.y - 40, `lost ${lost} pearls`, '#e8eee6', 18, 1.4);
   }
-  if (cause === 'air') floatText(p.x, p.y - 70, 'OUT OF AIR', '#ff6b5a', 24, 1.6);
+  if (cause === 'air') floatText(p.x, p.y - 70, 'no air', '#f2a93b', 26, 1.6);
   if (G.hull <= 0) G.gameOverT = 2.4;
   else p.respawnT = 1.6;
 }
@@ -152,9 +163,9 @@ function detonateSonar() {
   G.shake = 24;
   Sound.sfx.sonarBlast();
   for (let i = 0; i < 4; i++) {
-    spawnParticle({ kind: 'ring', color: i % 2 ? '#4de1ff' : '#e8fdff', x: m.x, y: m.y, life: 0.7 + i * 0.18, r0: 10, r1: Math.max(View.W, View.H) * (0.6 + i * 0.25), width: 12 - i * 2 });
+    spawnParticle({ kind: 'ring', color: i % 2 ? '#f2a93b' : '#e8eee6', x: m.x, y: m.y, life: 0.7 + i * 0.18, r0: 10, r1: Math.max(View.W, View.H) * (0.6 + i * 0.25), width: 6 - i });
   }
-  burst(m.x, m.y, 2.4, 'cyan');
+  burst(m.x, m.y, 2.4, 'amber');
   for (const e of G.enemies) {
     if (e.dead || e.hidden) continue;
     if (e.type === 'boss') { if (!e.armsLeft) damageEnemy(e, e.maxhp * 0.15, e.x, e.y, 'sonar'); }
@@ -175,7 +186,7 @@ function makeCreature(kind, x, y) {
   const e = {
     type: 'sea', kind, x, y, r: T.r, hp, maxhp: hp, score: T.score,
     anim: rand(6), animSpeed: kind === 'angler' ? rand(8, 11) : rand(3.5, 5), flash: 0, rot: 0, lastX: x,
-    shotT: rand(1.5, 10) / G.shotMul, dead: false, hidden: false, move: null,
+    shotT: rand(1.5, 10) / G.shotMul, tell: 0, dead: false, hidden: false, move: null,
   };
   G.enemies.push(e);
   return e;
@@ -207,7 +218,7 @@ function creatureAttack(e) {
     const a = Math.atan2(p.y - e.y, p.x - e.x);
     const v = 260 * sp;
     fireShot('spore', e.x + 18, e.y - 30, Math.cos(a) * v, Math.sin(a) * v);
-    spawnParticle({ kind: 'glow', color: 'amber', x: e.x + 18, y: e.y - 30, life: 0.3, size: 50, grow: 0.3 });
+    spawnParticle({ kind: 'glow', color: 'amber', x: e.x + 18, y: e.y - 35, life: 0.3, size: 60, grow: 0.3 });
   } else {
     for (const a of [-0.35, 0, 0.35]) fireShot('spine', e.x, e.y + 20, Math.sin(a) * 240 * sp, Math.cos(a) * 240 * sp);
   }
@@ -217,13 +228,13 @@ function damageEnemy(e, dmg, hx, hy, kind) {
   if (e.dead) return;
   if (e.type === 'boss' && e.armsLeft > 0) {
     // the head is shielded while any arm is still attached
-    spawnParticle({ kind: 'glow', color: 'white', x: hx, y: hy, life: 0.1, size: 18 });
+    spawnParticle({ kind: 'glow', color: 'paper', x: hx, y: hy, life: 0.1, size: 18 });
     Sound.sfx.clink();
     return;
   }
   e.hp -= dmg;
   e.flash = e.type === 'boss' || e.type === 'arm' ? 0.035 : 0.07;
-  spawnParticle({ kind: 'glow', color: WEAPONS[kind].glow, x: hx, y: hy, life: 0.15, size: 30, grow: 0.5 });
+  spawnParticle({ kind: 'glow', color: 'amber', x: hx, y: hy, life: 0.12, size: 26, grow: 0.5 });
   if (e.type === 'boss' || e.type === 'arm') Sound.sfx.bossHit(); else Sound.sfx.hit();
   if (e.hp <= 0) killEnemy(e);
 }
@@ -234,20 +245,21 @@ function killEnemy(e) {
   if (e.type === 'sea') {
     G.kills++;
     addScore(e.score);
-    const T = SEA_TYPES[e.kind];
-    spawnParticle({ kind: 'glow', color: T.glow, x: e.x, y: e.y, life: 0.35, size: 90, grow: 0.3 });
-    sparks(e.x, e.y, T.glow, 6, 180, 0.5, 12);
+    sparks(e.x, e.y, 'paper', 9, 200, 0.5, 12);
+    spawnParticle({ kind: 'ring', color: '#e8eee6', x: e.x, y: e.y, life: 0.35, r0: 6, r1: 46, width: 2, dash: true });
     bubbles(e.x, e.y, 7);
+    G.hitStop = Math.max(G.hitStop, 0.035);
+    logSpecies(e.kind);
     Sound.sfx.pop(e.kind);
     if (e.kind === 'urchin') dropPearl(e.x, e.y, 3);
     else if (chance(0.6)) dropPearl(e.x, e.y, 1);
     if (chance(0.05)) dropAir(e.x, e.y);
   } else if (e.type === 'wreck') {
     addScore(e.score);
-    burst(e.x, e.y, e.r / 40, 'orange');
+    burst(e.x, e.y, e.r / 40);
     for (let i = 0; i < 7; i++) {
       const a = rand(TAU), s = rand(60, 200);
-      spawnParticle({ kind: 'debris', color: e.anchor ? '#5d6a73' : '#8a5426', x: e.x, y: e.y, vx: Math.cos(a) * s + e.vx, vy: Math.sin(a) * s + e.vy, life: rand(0.6, 1.1), size: rand(3, 7), rot: rand(TAU), vr: rand(-8, 8), drag: 1.5, grav: 60 });
+      spawnParticle({ kind: 'debris', color: '#e8eee6', x: e.x, y: e.y, vx: Math.cos(a) * s + e.vx, vy: Math.sin(a) * s + e.vy, life: rand(0.6, 1.1), size: rand(3, 7), rot: rand(TAU), vr: rand(-8, 8), drag: 1.5, grav: 60 });
     }
     Sound.sfx.crunch(e.r / 30);
     if (chance(e.anchor ? 1 : 0.35)) dropPearl(e.x, e.y, e.anchor ? 3 : 1);
@@ -257,11 +269,12 @@ function killEnemy(e) {
     e.severed = 1;
     addScore(1000);
     inkCloud(e.x, e.y, 1.1);
-    burst(e.x, e.y, 1.2, 'pink');
+    burst(e.x, e.y, 1.2);
+    G.hitStop = 0.08;
     Sound.sfx.sever();
     G.shake = Math.max(G.shake, 12);
     for (let i = 0; i < 3; i++) dropPearl(e.x + rand(-20, 20), e.y, 1);
-    floatText(e.x, e.y - 20, b.armsLeft ? `${b.armsLeft} ARMS LEFT` : 'HEAD EXPOSED!', '#ffd23f', 22, 1.4);
+    floatText(e.x, e.y - 20, b.armsLeft ? `${b.armsLeft} arm${b.armsLeft > 1 ? 's' : ''} left` : 'the head is bare', '#f2a93b', 24, 1.4);
   } else if (e.type === 'boss') {
     bossDeath(e);
   }
@@ -270,13 +283,14 @@ function killEnemy(e) {
 function bossDeath(b) {
   G.boss = null;
   addScore(b.score);
-  floatText(b.x, b.y - 40, '+' + b.score.toLocaleString('en-US'), '#ffd23f', 34, 2);
+  floatText(b.x, b.y - 40, '+' + b.score.toLocaleString('en-US'), '#f2a93b', 34, 2);
+  logSpecies(b.sprite);
   Sound.sfx.bossGroan();
   for (let i = 0; i < 10; i++) {
     G.timers.push({
       t: i * 0.13,
       fn: () => {
-        burst(b.x + rand(-100, 100), b.y + rand(-100, 60), rand(0.8, 1.4), pick(['pink', 'orange', 'purple']));
+        burst(b.x + rand(-100, 100), b.y + rand(-100, 60), rand(0.8, 1.4));
         inkCloud(b.x + rand(-60, 60), b.y + rand(-60, 40), 0.6);
         Sound.sfx.crunch(1.2);
         G.shake = Math.max(G.shake, 12);
@@ -286,7 +300,7 @@ function bossDeath(b) {
   G.timers.push({
     t: 1.4,
     fn: () => {
-      burst(b.x, b.y, 3.2, 'pink');
+      burst(b.x, b.y, 3.2, 'amber');
       inkCloud(b.x, b.y, 2.2);
       G.flash = 0.8; G.shake = 26;
       Sound.sfx.sonarBlast();
@@ -314,11 +328,11 @@ function collectPickup(pk) {
     G.pearls += pk.value;
     G.pearlsTotal += pk.value;
     addScore(25 * pk.value);
-    if (pk.value > 1) floatText(pk.x, pk.y, '+' + pk.value, '#ffd76a', 18);
+    if (pk.value > 1) floatText(pk.x, pk.y, '+' + pk.value, '#e8eee6', 18);
     Sound.sfx.pearl(pk.value > 1);
   } else if (pk.type === 'air') {
     G.oxygen = Math.min(100, G.oxygen + 35);
-    floatText(p.x, p.y - 50, '+AIR', '#bff4ff', 20);
+    floatText(p.x, p.y - 50, 'air', '#e8eee6', 20);
     bubbles(pk.x, pk.y, 8, 10);
     Sound.sfx.gulp();
   }

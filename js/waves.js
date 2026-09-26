@@ -1,16 +1,16 @@
 'use strict';
 
-const DEPTH_PER_WAVE = 200;
+const DEPTH_PER_WAVE = 400; // feet
 
 const WAVES = [
-  { type: 'bloom', title: 'Jelly Bloom', clusters: 4, per: 6, kinds: ['jelly'] },
-  { type: 'current', title: 'Lantern Current', groups: 4, per: 7, kinds: ['angler'] },
-  { type: 'maelstrom', title: 'The Maelstrom', rings: [14], kinds: ['jellyB', 'jelly'] },
-  { type: 'kraken', title: 'Grandmother Inkwell', arms: 4 },
-  { type: 'wreckfall', title: 'Wreckfall', dur: 16 },
-  { type: 'bloom', title: 'Pincushion Reef', clusters: 5, per: 6, kinds: ['jelly', 'urchin', 'jellyB'] },
-  { type: 'current', title: 'Midnight Shoal', groups: 5, per: 8, kinds: ['angler', 'angler', 'jellyB'] },
-  { type: 'kraken', title: 'The Old One', arms: 6, hard: true },
+  { type: 'bloom', title: 'A bloom of saucer jellies', note: 'They come up in clouds, pulsing in threes.', clusters: 4, per: 6, kinds: ['jelly'] },
+  { type: 'current', title: 'Lamp-horns on the current', note: 'Lights moving together. Too many to be one fish.', groups: 4, per: 7, kinds: ['angler'] },
+  { type: 'maelstrom', title: 'The maelstrom', note: 'The water turns, and everything in it turns too.', rings: [14], kinds: ['jellyB', 'jelly'] },
+  { type: 'kraken', title: 'Grandmother Inkwell', note: 'Something large. The telephone to the ship goes quiet.', arms: 4 },
+  { type: 'wreckfall', title: 'Wreckfall', note: 'Barrels and anchors from a ship that went down long before us.', dur: 16 },
+  { type: 'bloom', title: 'The thorn reef', note: 'Jellies, and the thorns that roll along with them.', clusters: 5, per: 6, kinds: ['jelly', 'urchin', 'jellyB'] },
+  { type: 'current', title: 'Midnight shoal', note: 'The lamp-horns again, with bells trailing behind.', groups: 5, per: 8, kinds: ['angler', 'angler', 'jellyB'] },
+  { type: 'kraken', title: 'The Old One', note: 'Scarred all over. It is older than the ship above us.', arms: 6, hard: true },
 ];
 
 function startWave(n) {
@@ -294,7 +294,7 @@ const WaveTypes = {
         const hp = (180 + loop * 120) * (def.hard ? 1.5 : 1) * (1 + (n - 1) * 0.03);
         b = {
           type: 'boss', x: View.W / 2, y: -220, r: 70, oy: -45, hp, maxhp: hp,
-          name: def.title.toUpperCase(), sprite: def.hard ? 'krakenOld' : 'kraken',
+          name: def.title, sprite: def.hard ? 'krakenOld' : 'kraken',
           score: (def.hard ? 12000 : 6000) * (loop + 1),
           state: 'enter', tx: View.W / 2, ty: 235, retarget: 2, atkT: 1.8,
           anim: 0, animSpeed: 3, flash: 0, rot: 0, dead: false, hidden: false,

@@ -44,7 +44,7 @@ function resetGame() {
     player: makePlayer(), bullets: [], enemies: [], shots: [], pickups: [], particles: [], texts: [], timers: [],
     buoy: null, boss: null, kills: 0,
     waveState: 'intro', waveT: 0, waveObj: null, waveDef: null, clearBonus: 0,
-    shake: 0, flash: 0, time: 0, gameOverT: 0,
+    shake: 0, flash: 0, time: 0, gameOverT: 0, hitStop: 0, creakT: 8,
     hpMul: 1, shotMul: 1, shotSpeed: 1, shotCap: 8,
   };
   startWave(1);
@@ -68,6 +68,8 @@ window.addEventListener('keydown', e => {
   } else if (state === 'dock') {
     const m = /^Digit([1-9])$/.exec(e.code);
     if (m) buyItem(+m[1] - 1);
+    const l = /^Key([A-E])$/.exec(e.code);
+    if (l) buyItem(l[1].charCodeAt(0) - 65);
     if (e.code === 'Enter') leaveDock();
   } else if (state === 'menu' || state === 'gameover') {
     if (e.code === 'Enter') startGame();
@@ -124,6 +126,8 @@ function isFiring() {
 // ---------------------------------------------------------------- update
 
 function update(dt) {
+  // a tiny freeze on big hits, so they land
+  if (G.hitStop > 0) { G.hitStop -= dt; dt *= 0.12; }
   G.time += dt;
   const timers = G.timers;
   for (let i = 0; i < timers.length; i++) {
@@ -153,7 +157,7 @@ function update(dt) {
     G.nextHull += 30000;
     if (G.hull < MAX_HULL) {
       G.hull++;
-      floatText(G.player.x, G.player.y - 60, '+1 HULL', '#7dffb0', 26, 1.6);
+      floatText(G.player.x, G.player.y - 60, 'a spare plate', '#f2a93b', 24, 1.6);
       Sound.sfx.oneUp();
     }
   }
@@ -296,10 +300,16 @@ function updateEnemies(dt) {
       if (e.type === 'boss') e.rot *= 0.3;
     }
     if (e.type === 'sea' && !e.hidden && e.y > 20 && e.y < H * 0.78 && e.x > 0 && e.x < W) {
-      e.shotT -= dt;
-      if (e.shotT <= 0) {
-        e.shotT = rand(4, 16) / G.shotMul * (e.kind === 'angler' ? 1.4 : 1);
-        creatureAttack(e);
+      // every creature gives a moment's warning before it attacks
+      if (e.tell > 0) {
+        e.tell -= dt;
+        if (e.tell <= 0) creatureAttack(e);
+      } else {
+        e.shotT -= dt;
+        if (e.shotT <= 0) {
+          e.shotT = rand(4, 16) / G.shotMul * (e.kind === 'angler' ? 1.4 : 1);
+          e.tell = e.kind === 'angler' ? 0.55 : 0.35;
+        }
       }
     }
     if (!e.hidden && p.alive && p.invuln <= 0) {
@@ -324,7 +334,7 @@ function updateShots(dt) {
       const rr = s.r + p.r;
       if (dist2(s.x, s.y, p.x, p.y) < rr * rr) {
         s.dead = true;
-        sparks(s.x, s.y, 'purple', 6, 150, 0.4, 12);
+        sparks(s.x, s.y, 'paper', 6, 150, 0.4, 12);
         playerHit();
       }
     }
@@ -421,7 +431,7 @@ function render() {
   ctx.fillStyle = Background.vignette;
   ctx.fillRect(0, 0, W, H);
   if (G && G.flash > 0 && state !== 'menu') {
-    ctx.fillStyle = `rgba(225,250,255,${Math.min(1, G.flash)})`;
+    ctx.fillStyle = `rgba(232,238,230,${Math.min(1, G.flash)})`;
     ctx.fillRect(0, 0, W, H);
   }
 }
@@ -434,10 +444,10 @@ function drawDarkness() {
   dc.setTransform(DARK_RES, 0, 0, DARK_RES, 0, 0);
   dc.globalCompositeOperation = 'source-over';
   dc.clearRect(0, 0, W, H);
-  dc.fillStyle = `rgba(0,2,8,${d})`;
+  dc.fillStyle = `rgba(2,6,20,${d})`;
   dc.fillRect(0, 0, W, H);
   dc.globalCompositeOperation = 'destination-out';
-  const glow = Sprites.glow.white.c;
+  const glow = Sprites.glow.paper.c;
   const hole = (x, y, s, a = 1) => { dc.globalAlpha = a; dc.drawImage(glow, x - s / 2, y - s / 2, s, s); };
   const p = G.player;
   if (p.alive) { hole(p.x, p.y - 150, 460, 1); hole(p.x, p.y, 230, 1); }
@@ -468,14 +478,22 @@ function drawParticles(layer) {
     switch (p.kind) {
       case 'glow':
         ctx.globalAlpha = Math.min(1, k * 1.6) * p.alpha;
-        ctx.drawImage(Sprites.glow[p.color].c, p.x - sz / 2, p.y - sz / 2, sz, sz);
+        if (p.color === 'amber') {
+          ctx.drawImage(Sprites.glow.amber.c, p.x - sz / 2, p.y - sz / 2, sz, sz);
+        } else {
+          // everything that isn't a lamp is drawn as a pen dot
+          ctx.fillStyle = PAPER;
+          ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.8, sz * 0.08), 0, TAU); ctx.fill();
+        }
         break;
       case 'ring': {
         const r = lerp(p.r0, p.r1, ease.outCubic(1 - k));
         ctx.globalAlpha = k;
         ctx.strokeStyle = p.color;
         ctx.lineWidth = p.width * k + 0.5;
+        if (p.dash) ctx.setLineDash([4, 6]);
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
+        if (p.dash) ctx.setLineDash([]);
         break;
       }
       case 'ink':
@@ -484,16 +502,17 @@ function drawParticles(layer) {
         break;
       case 'bubble':
         ctx.globalAlpha = Math.min(1, k * 2) * 0.8;
-        ctx.strokeStyle = '#d8f7ff';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = PAPER;
+        ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.stroke();
         break;
       case 'debris':
         ctx.save();
         ctx.translate(p.x, p.y); ctx.rotate(p.rot);
         ctx.globalAlpha = Math.min(1, k * 2);
-        ctx.fillStyle = p.color;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(-p.size / 2, 0); ctx.lineTo(p.size / 2, 0); ctx.stroke();
         ctx.restore();
         break;
     }
@@ -506,12 +525,13 @@ function drawPickups() {
   for (const pk of G.pickups) {
     if (pk.type === 'pearl') {
       const big = pk.value > 1;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.35;
-      const s = big ? 46 : 32;
-      ctx.drawImage(Sprites.glow[big ? 'amber' : 'white'].c, pk.x - s / 2, pk.y - s / 2, s, s);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      if (big) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(Sprites.glow.amber.c, pk.x - 22, pk.y - 22, 44, 44);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
       drawSprite(ctx, big ? Sprites.bigPearl : Sprites.pearl, pk.x, pk.y);
     } else {
       const s = 1 + Math.sin(pk.t * 4) * 0.06;
@@ -520,46 +540,52 @@ function drawPickups() {
   }
 }
 
+// Lines "boil" a few times a second, like pencil animation, independent of the creature's own motion.
+function boilIndex(seed) { return (Math.floor(performance.now() / 140) + seed) % BOIL; }
+
 function creatureFrame(e) {
   const set = Sprites.sea[e.type === 'boss' ? e.sprite : e.kind];
-  const i = Math.floor(e.anim) % 6;
-  return e.flash > 0 ? set.flash[i] : set.frames[i];
+  const i = Math.floor(e.anim) % set.count;
+  const b = boilIndex(e.boilSeed || 0);
+  return e.flash > 0 ? set.flash[i][b] : set.frames[i][b];
 }
 
-const ARM_COLORS = { kraken: ['#d6503a', '#7a2218'], krakenOld: ['#6a3fb5', '#2d1463'] };
+const ARM_COLORS = { kraken: PRUSSIAN, krakenOld: '#172f63' };
 
 function drawArm(arm, b) {
   const pts = arm.pts;
   if (!pts.length) return;
-  const [fill, dark] = ARM_COLORS[b.sprite];
   const n = pts.length;
-  ctx.fillStyle = dark;
-  for (let i = 0; i < n; i++) {
-    const r = lerp(17, 5, i / (n - 1)) + 2.5;
-    ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], r, 0, TAU); ctx.fill();
-  }
-  ctx.fillStyle = arm.flash > 0 ? '#ffd9cf' : fill;
-  for (let i = 0; i < n; i++) {
-    const r = lerp(17, 5, i / (n - 1));
-    ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], r, 0, TAU); ctx.fill();
-  }
+  const rad = i => lerp(16, 4.5, i / (n - 1));
+  // outline first, then the body over it, so only the outer edge of the union stays white
+  ctx.fillStyle = PAPER;
+  for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], rad(i) + 1.8, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = arm.flash > 0 ? '#6f8fc9' : ARM_COLORS[b.sprite];
+  for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], rad(i), 0, TAU); ctx.fill(); }
   if (arm.dead) {
     const [x, y] = pts[n - 1];
-    ctx.fillStyle = '#2a0d12';
-    ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = DEEP;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, TAU); ctx.fill();
     return;
   }
-  ctx.fillStyle = '#ffe3c9';
-  for (let i = 2; i < n; i += 2) {
+  ctx.strokeStyle = 'rgba(232,238,230,0.65)';
+  ctx.lineWidth = 0.9;
+  for (let i = 1; i < n; i++) {
     const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
     const a = Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2;
-    const r = lerp(17, 5, i / (n - 1)) * 0.55;
-    ctx.beginPath(); ctx.arc(x1 + Math.cos(a) * r, y1 + Math.sin(a) * r, Math.max(1.4, r * 0.4), 0, TAU); ctx.fill();
+    const r = rad(i);
+    // shading strokes on the shadow side, suckers on the other
+    ctx.beginPath();
+    ctx.moveTo(x1 + Math.cos(a) * r * 0.2, y1 + Math.sin(a) * r * 0.2);
+    ctx.lineTo(x1 + Math.cos(a) * r * 0.9, y1 + Math.sin(a) * r * 0.9);
+    ctx.stroke();
+    if (i % 2 === 0) {
+      ctx.beginPath(); ctx.arc(x1 - Math.cos(a) * r * 0.5, y1 - Math.sin(a) * r * 0.5, Math.max(1.2, r * 0.28), 0, TAU); ctx.stroke();
+    }
   }
 }
 
 function drawEnemies() {
-  const glowK = 0.25 + Background.darkness();
   for (const e of G.enemies) {
     if (e.hidden || e.type !== 'wreck') continue;
     drawSprite(ctx, e.sprite, e.x, e.y, e.rot);
@@ -569,21 +595,26 @@ function drawEnemies() {
       ctx.globalCompositeOperation = 'source-over';
     }
   }
-  // bioluminescence behind the creatures, stronger the darker the water
+  // the only glow a creature has is the lamp-horn's lamp, and it flickers before it spits
+  const dk = Background.darkness();
   ctx.globalCompositeOperation = 'lighter';
   for (const e of G.enemies) {
-    if (e.hidden || e.type !== 'sea') continue;
-    const T = SEA_TYPES[e.kind];
-    ctx.globalAlpha = glowK * (e.kind === 'urchin' ? 0.35 : 0.6);
-    const s = e.kind === 'angler' ? 60 : 90;
-    const gx = e.kind === 'angler' ? e.x + 18 : e.x, gy = e.kind === 'angler' ? e.y - 35 : e.y - 8;
-    ctx.drawImage(Sprites.glow[T.glow].c, gx - s / 2, gy - s / 2, s, s);
+    if (e.hidden || e.type !== 'sea' || e.kind !== 'angler') continue;
+    let a = 0.35 + dk * 0.6;
+    if (e.tell > 0) a *= Math.floor(e.tell * 14) % 2 ? 1.8 : 0.3;
+    ctx.globalAlpha = Math.min(1, a);
+    ctx.drawImage(Sprites.glow.amber.c, e.x + 19 - 28, e.y - 35 - 28, 56, 56);
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
   for (const e of G.enemies) {
     if (e.hidden || e.type !== 'sea') continue;
-    drawSprite(ctx, creatureFrame(e), e.x, e.y, e.rot);
+    let sc = 1;
+    if (e.tell > 0 && e.kind !== 'angler') {
+      // jellies and thorns draw themselves in before they let go
+      sc = 1 - Math.sin((e.tell / 0.35) * Math.PI) * 0.08;
+    }
+    drawSprite(ctx, creatureFrame(e), e.x, e.y, e.rot, sc);
   }
   const b = G.boss;
   if (b && !b.dead) {
@@ -591,26 +622,17 @@ function drawEnemies() {
     const by = b.y + Math.sin(G.time * 1.6) * 5;
     drawSprite(ctx, creatureFrame(b), b.x, by, b.rot);
     if (b.armsLeft > 0 && b.state === 'fight') {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.18 + Math.sin(G.time * 4) * 0.06;
-      ctx.strokeStyle = '#8fe9ff';
-      ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.ellipse(b.x, by - 40, 92, 104, 0, 0, TAU); ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = 'rgba(232,238,230,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 7]);
+      ctx.lineDashOffset = -G.time * 12;
+      ctx.beginPath(); ctx.ellipse(b.x, by - 40, 94, 106, 0, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 }
 
 function drawShots() {
-  ctx.globalCompositeOperation = 'lighter';
-  for (const s of G.shots) {
-    const g = s.kind === 'spine' ? 'pink' : 'purple';
-    ctx.globalAlpha = 0.7;
-    ctx.drawImage(Sprites.glow[g].c, s.x - 18, s.y - 18, 36, 36);
-  }
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
   for (const s of G.shots) {
     if (s.kind === 'spine') drawSprite(ctx, Sprites.spine, s.x, s.y, Math.atan2(s.vy, s.vx) - Math.PI / 2);
     else drawSprite(ctx, Sprites.spore, s.x, s.y, s.t * 3);
@@ -618,10 +640,7 @@ function drawShots() {
 }
 
 function drawBullets() {
-  ctx.globalCompositeOperation = 'lighter';
-  for (const b of G.bullets) if (b.kind === 'sonar') drawSprite(ctx, Sprites.bullet.sonar, b.x, b.y, b.ang);
-  ctx.globalCompositeOperation = 'source-over';
-  for (const b of G.bullets) if (b.kind !== 'sonar') drawSprite(ctx, Sprites.bullet[b.kind], b.x, b.y, b.ang);
+  for (const b of G.bullets) drawSprite(ctx, Sprites.bullet[b.kind], b.x, b.y, b.ang);
 }
 
 function drawPlayer() {
@@ -629,35 +648,36 @@ function drawPlayer() {
   if (!p.alive) return;
   const blink = p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 0;
   ctx.save();
-  ctx.translate(p.x, p.y);
+  // the sphere never quite sits still: it bobs and rolls a little on its own
+  ctx.translate(p.x, p.y + Math.sin(G.time * 2.1) * 1.6);
 
-  // headlamp cone
   ctx.globalCompositeOperation = 'lighter';
   const cone = ctx.createLinearGradient(0, -30, 0, -260);
-  cone.addColorStop(0, 'rgba(255,240,190,0.22)');
-  cone.addColorStop(1, 'rgba(255,240,190,0)');
+  cone.addColorStop(0, 'rgba(242,169,59,0.16)');
+  cone.addColorStop(1, 'rgba(242,169,59,0)');
   ctx.fillStyle = cone;
-  ctx.beginPath(); ctx.moveTo(-5, -32); ctx.lineTo(5, -32); ctx.lineTo(80, -260); ctx.lineTo(-80, -260); ctx.closePath(); ctx.fill();
-  if (p.muzzle > 0) {
-    const c = Sprites.glow[WEAPONS[G.weapon].glow].c;
-    ctx.drawImage(c, -18, -52, 36, 36);
-  }
-  if (p.invuln > 0) {
-    ctx.globalAlpha = 0.25 + Math.sin(G.time * 10) * 0.1;
-    ctx.drawImage(Sprites.glow.cyan.c, -55, -55, 110, 110);
-    ctx.globalAlpha = 1;
-  }
+  ctx.beginPath(); ctx.moveTo(-5, -30); ctx.lineTo(5, -30); ctx.lineTo(75, -260); ctx.lineTo(-75, -260); ctx.closePath(); ctx.fill();
+  if (p.muzzle > 0) ctx.drawImage(Sprites.glow.amber.c, -16, -50, 32, 32);
   ctx.globalCompositeOperation = 'source-over';
+  if (p.invuln > 0) {
+    ctx.strokeStyle = 'rgba(232,238,230,0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2, 5]);
+    ctx.lineDashOffset = G.time * 20;
+    ctx.beginPath(); ctx.arc(0, -2, 34, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
-  // spinning propeller blur
-  ctx.strokeStyle = 'rgba(210,230,240,0.55)';
-  ctx.lineWidth = 2.4;
-  const pw = Math.abs(Math.sin(p.prop)) * 11 + 2;
-  ctx.beginPath(); ctx.moveTo(-pw, 37); ctx.lineTo(pw, 37); ctx.stroke();
+  ctx.strokeStyle = 'rgba(232,238,230,0.6)';
+  ctx.lineWidth = 1.4;
+  for (const sx of [-24, 24]) {
+    const pw = Math.abs(Math.sin(p.prop + sx)) * 5 + 1;
+    ctx.beginPath(); ctx.moveTo(sx - pw, 31); ctx.lineTo(sx + pw, 31); ctx.stroke();
+  }
 
-  ctx.rotate(p.tilt * 0.25);
+  ctx.rotate(p.tilt * 0.3 + Math.sin(G.time * 1.3) * 0.04);
   ctx.globalAlpha = blink ? 0.4 : 1;
-  const s = Sprites.sub;
+  const s = Sprites.sphere;
   ctx.drawImage(s.c, -s.w / 2, -s.h / 2, s.w, s.h);
   ctx.restore();
 }
@@ -674,9 +694,9 @@ function drawTexts() {
   for (const t of G.texts) {
     const k = t.life / t.max;
     ctx.globalAlpha = Math.min(1, k * 3);
-    ctx.font = `${t.size}px ${DISPLAY_FONT}`;
+    ctx.font = `italic ${t.size}px ${DISPLAY_FONT}`;
     ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(4,10,20,0.85)';
+    ctx.strokeStyle = 'rgba(8,20,50,0.75)';
     ctx.strokeText(t.text, t.x, t.y);
     ctx.fillStyle = t.color;
     ctx.fillText(t.text, t.x, t.y);
@@ -685,98 +705,86 @@ function drawTexts() {
   ctx.textBaseline = 'alphabetic';
 }
 
-const INK = '#0d1a2b', CREAM = '#fff1d6', TOMATO = '#ef4b2c', AMBER = '#ffc93c';
-const DISPLAY_FONT = 'Shrikhand, Georgia, serif';
-const MONO_FONT = '"Space Mono", ui-monospace, monospace';
-
-// Two-colour offset print look: an ink outline, a tomato "misprint" layer and a cream top layer.
-function risoText(text, x, y, size) {
-  ctx.font = `${size}px ${DISPLAY_FONT}`;
-  const o = Math.max(2, size * 0.07);
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = size * 0.14;
-  ctx.strokeStyle = INK;
-  ctx.strokeText(text, x + o, y + o);
-  ctx.strokeText(text, x, y);
-  ctx.fillStyle = TOMATO;
-  ctx.fillText(text, x + o, y + o);
-  ctx.fillStyle = CREAM;
-  ctx.fillText(text, x, y);
-}
+const DISPLAY_FONT = '"IM Fell English", Georgia, serif';
+const MONO_FONT = '"Courier Prime", "Courier New", monospace';
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 function drawBossBar() {
   const b = G.boss;
   if (!b || b.dead || b.state === 'enter') return;
   const W = View.W;
-  const w = Math.min(460, W - 60), x = Math.round((W - w) / 2), y = W < 700 ? 108 : 88, h = 14;
+  const w = Math.min(420, W - 60), x = Math.round((W - w) / 2), y = W < 700 ? 116 : 92, h = 5;
   let k, label;
   if (b.armsLeft > 0) {
     let hp = 0, max = 0;
     for (const a of b.arms) { hp += Math.max(0, a.hp); max += a.maxhp; }
     k = hp / max;
-    label = `ARMS ${b.armsLeft}/${b.arms.length}`;
+    label = `arms: ${'|'.repeat(b.armsLeft)}`;
   } else {
     k = clamp(b.hp / b.maxhp, 0, 1);
-    label = Math.ceil(k * 100) + '%';
+    label = 'the head';
   }
-  ctx.fillStyle = INK;
-  ctx.fillRect(x + 3, y + 3, w, h);
-  ctx.fillStyle = 'rgba(13,26,43,0.85)';
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = b.armsLeft > 0 ? '#ff8f6b' : TOMATO;
-  ctx.fillRect(x, y, w * k, h);
-  ctx.fillStyle = INK;
-  for (let i = 1; i < 10; i++) ctx.fillRect(x + (w * i) / 10 - 1, y, 2, h);
-  ctx.strokeStyle = CREAM;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, y, w, h);
-  ctx.font = `700 12px ${MONO_FONT}`;
-  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.fillStyle = b.armsLeft > 0 ? PAPER : AMBER;
+  ctx.fillRect(x + 2, y + 2, Math.max(0, (w - 3) * k), h - 3);
+  ctx.fillStyle = PAPER;
   ctx.textAlign = 'left';
-  ctx.fillText(b.name, x, y - 7);
+  ctx.font = `italic 19px ${DISPLAY_FONT}`;
+  ctx.fillText(b.name, x, y - 8);
   ctx.textAlign = 'right';
-  ctx.fillText(label, x + w, y - 7);
+  ctx.font = `14px ${MONO_FONT}`;
+  ctx.fillText(label, x + w, y - 8);
 }
 
+// Each wave opens like an entry in the log: depth and water, a heading, one line of notes.
 function drawBanner() {
   const W = View.W, H = View.H;
-  let title = null, kicker = null;
+  let title = null, kicker = null, note = null;
   const t = G.waveT, dur = 2.4;
   if (G.waveState === 'intro') {
     title = G.waveDef.title;
-    const z = zoneAt(G.depth);
-    kicker = G.depth.toLocaleString('en-US') + ' M · ' + (G.waveDef.type === 'kraken' ? 'SOMETHING BIG' : z.name.toUpperCase());
+    kicker = `${G.depth.toLocaleString('en-US')} ft, ${zoneAt(G.depth).name}`;
+    note = G.waveDef.note;
   } else if (G.waveState === 'clear' && G.gameOverT <= 0) {
-    title = 'Waters clear';
-    kicker = '+' + G.clearBonus.toLocaleString('en-US') + ' BONUS';
+    title = 'Clear water';
+    kicker = `${G.depth.toLocaleString('en-US')} ft`;
+    note = `${G.clearBonus.toLocaleString('en-US')} points for the log.`;
   }
   if (!title) return;
-  const a = t < 0.3 ? t / 0.3 : t > dur - 0.4 ? Math.max(0, (dur - t) / 0.4) : 1;
-  const slide = 1 - ease.outCubic(clamp(t / 0.45, 0, 1));
+  const a = t < 0.4 ? t / 0.4 : t > dur - 0.4 ? Math.max(0, (dur - t) / 0.4) : 1;
   ctx.save();
   ctx.globalAlpha = a;
-  ctx.translate(W / 2 + slide * -60, H * 0.42);
-  ctx.rotate(-0.045);
+  ctx.translate(W / 2, H * 0.4);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  let size = Math.min(72, W / 8.5);
-  ctx.font = `${size}px ${DISPLAY_FONT}`;
+  let size = Math.min(58, W / 10);
+  ctx.font = `italic ${size}px ${DISPLAY_FONT}`;
   const maxW = W - 60;
   const tw = ctx.measureText(title).width;
-  if (tw > maxW) size *= maxW / tw;
+  if (tw > maxW) { size *= maxW / tw; ctx.font = `italic ${size}px ${DISPLAY_FONT}`; }
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(8,20,50,0.55)';
+  ctx.strokeText(title, 0, 0);
+  ctx.fillStyle = PAPER;
+  ctx.fillText(title, 0, 0);
 
-  const ks = Math.round(Math.max(13, size * 0.24));
-  ctx.font = `700 ${ks}px ${MONO_FONT}`;
-  const kw = ctx.measureText(kicker).width + 22, kh = ks + 12;
-  ctx.fillStyle = INK;
-  ctx.fillRect(-kw / 2 + 3, -size * 0.95 - kh / 2 + 3, kw, kh);
-  ctx.fillStyle = G.waveDef.type === 'kraken' && G.waveState === 'intro' ? TOMATO : AMBER;
-  ctx.fillRect(-kw / 2, -size * 0.95 - kh / 2, kw, kh);
-  ctx.fillStyle = INK;
-  ctx.fillText(kicker, 0, -size * 0.95 + 1);
-
-  risoText(title, 0, 0, size);
+  ctx.font = `15px ${MONO_FONT}`;
+  ctx.fillStyle = G.waveDef.type === 'kraken' && G.waveState === 'intro' ? AMBER : PAPER;
+  ctx.fillText(kicker, 0, -size * 0.95);
+  // a rule that draws itself across, like a pen stroke
+  const rw = Math.min(W - 80, Math.max(tw, 260)) * ease.outCubic(clamp(t / 0.6, 0, 1));
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(-rw / 2, -size * 0.62); ctx.lineTo(rw / 2, -size * 0.6); ctx.stroke();
+  if (note) {
+    ctx.font = `15px ${MONO_FONT}`;
+    ctx.fillStyle = 'rgba(232,238,230,0.85)';
+    ctx.fillText(note, 0, size * 0.8, W - 40);
+  }
   ctx.restore();
+  ctx.textBaseline = 'alphabetic';
 }
 
 // ---------------------------------------------------------------- menu scene
@@ -785,14 +793,15 @@ function buildMenuSchool() {
   menuSchool = [];
   const kinds = ['jelly', 'jellyB', 'angler', 'jelly', 'urchin', 'jellyB', 'angler', 'jelly'];
   kinds.forEach(kind => {
-    menuSchool.push({ kind, x: rand(View.W), y: rand(View.H), vy: rand(-26, -12), ph: rand(TAU), anim: rand(6), scale: rand(0.75, 1.15) });
+    menuSchool.push({ kind, x: rand(View.W), y: rand(View.H), vy: rand(-26, -12), ph: rand(TAU), anim: rand(6), scale: rand(0.75, 1.15), seed: randi(0, 9) });
   });
 }
 
 function drawMenuSchool() {
   for (const c of menuSchool) {
     const set = Sprites.sea[c.kind];
-    drawSprite(ctx, set.frames[Math.floor(c.anim) % 6], c.x + Math.sin(c.ph) * 30, c.y, Math.sin(c.ph) * 0.12, c.scale, 0.8);
+    const f = set.frames[Math.floor(c.anim) % set.count][boilIndex(c.seed)];
+    drawSprite(ctx, f, c.x + Math.sin(c.ph) * 30, c.y, Math.sin(c.ph) * 0.12, c.scale, 0.75);
   }
 }
 
@@ -809,10 +818,10 @@ function updateMenu(dt) {
 
 const hud = {
   root: $('hud'), score: $('score'), depth: $('depthLabel'), hull: $('hull'), sonar: $('sonarIcons'),
-  pearls: $('pearls'), weapon: $('weaponName'), weaponBox: $('weaponBox'), pips: $('pips'), o2: $('o2Fill'), o2Box: $('o2Box'),
+  pearls: $('pearls'), weapon: $('weaponName'), grade: $('grade'), o2: $('o2Cells'), o2Box: $('o2Box'),
 };
 const hudCache = {};
-for (let i = 0; i < MAX_LEVEL; i++) hud.pips.appendChild(document.createElement('span'));
+for (let i = 0; i < 10; i++) hud.o2.appendChild(document.createElement('i'));
 
 // Up to 5 little marks, then a number, so the HUD never grows wider than the phone.
 function tally(el, n) {
@@ -832,23 +841,21 @@ function setHud(key, val, fn) {
 
 function updateHud() {
   setHud('score', G.score, v => { hud.score.textContent = v.toLocaleString('en-US'); });
-  setHud('depth', G.depth, v => { hud.depth.textContent = v.toLocaleString('en-US') + ' m'; });
+  setHud('depth', G.depth, v => { hud.depth.textContent = v.toLocaleString('en-US') + ' ft'; });
   setHud('hull', G.hull, v => tally(hud.hull, v));
   setHud('sonar', G.sonar, v => { tally(hud.sonar, v); $('sonarCount').textContent = v; });
   setHud('pearls', G.pearls, v => { hud.pearls.textContent = v; });
-  setHud('weapon', G.weapon, v => {
-    hud.weapon.textContent = WEAPONS[v].name;
-    hud.weaponBox.style.setProperty('--wc', WEAPONS[v].color);
+  setHud('weapon', G.weapon, v => { hud.weapon.textContent = WEAPONS[v].name; });
+  setHud('level', G.level, v => { hud.grade.textContent = 'grade ' + ROMAN[v]; });
+  setHud('o2', Math.ceil(G.oxygen / 10), v => {
+    [...hud.o2.children].forEach((c, i) => c.classList.toggle('on', i < v));
   });
-  setHud('level', G.level, v => {
-    [...hud.pips.children].forEach((s, i) => s.classList.toggle('on', i < v));
-  });
-  setHud('o2', Math.round(G.oxygen), v => { hud.o2.style.transform = `scaleX(${v / 100})`; });
   setHud('low', G.oxygen < 25, v => { hud.o2Box.classList.toggle('low', v); });
   setHud('boss', !!G.boss, v => { hud.root.classList.toggle('boss', v); });
 }
 
 function showScreen(id) {
+  if (id) $('plateToast').classList.add('hidden');
   for (const s of ['menu', 'pause', 'dock', 'gameover']) $(s).classList.toggle('hidden', s !== id);
   hud.root.classList.toggle('hidden', !(state === 'playing' || state === 'paused'));
   document.body.classList.toggle('hide-cursor', state === 'playing' && Input.mode === 'mouse');
@@ -856,8 +863,10 @@ function showScreen(id) {
 
 function refreshBest() {
   const best = Store.get('lf_best', { score: 0, depth: 0 });
-  $('bestScore').textContent = best.score.toLocaleString('en-US');
-  $('bestDepth').textContent = best.depth.toLocaleString('en-US');
+  $('record').textContent = best.score > 0
+    ? `Deepest so far: ${best.depth.toLocaleString('en-US')} ft, with ${best.score.toLocaleString('en-US')} points.`
+    : 'No dives in the log yet.';
+  renderPlates();
 }
 
 function startGame() {
@@ -876,6 +885,7 @@ function pauseGame() {
   if (state !== 'playing') return;
   state = 'paused';
   Input.mouseDown = false;
+  $('pauseDepth').textContent = G.depth.toLocaleString('en-US');
   showScreen('pause');
 }
 
@@ -901,14 +911,13 @@ function gameOver() {
   const best = Store.get('lf_best', { score: 0, depth: 0 });
   const record = G.score > best.score;
   Store.set('lf_best', { score: Math.max(best.score, G.score), depth: Math.max(best.depth, G.depth) });
-  $('goDepth').textContent = G.depth.toLocaleString('en-US') + ' m';
+  $('goDepth').textContent = G.depth.toLocaleString('en-US');
+  $('goZone').textContent = zoneAt(G.depth).name;
   $('goKills').textContent = G.kills.toLocaleString('en-US');
   $('goPearls').textContent = G.pearlsTotal.toLocaleString('en-US');
   $('goScore').textContent = G.score.toLocaleString('en-US');
-  $('goBest').textContent = Math.max(best.score, G.score).toLocaleString('en-US');
-  $('goDive').textContent = String(randi(100, 999));
-  $('goZone').textContent = zoneAt(G.depth).name;
-  $('newRecord').classList.toggle('hidden', !record);
+  $('goBest').textContent = record ? 'That is the best dive in the log.' : `The best dive in the log is still ${best.score.toLocaleString('en-US')}.`;
+  $('goSpecies').textContent = `${speciesLog.size} of ${Object.keys(SPECIES).length}`;
   Sound.Music.setMode('normal');
   showScreen('gameover');
 }
@@ -919,47 +928,47 @@ function dockItems() {
   const items = [];
   const L = G.level, w = WEAPONS[G.weapon];
   items.push({
-    name: `Tune the ${w.name}`, desc: L >= MAX_LEVEL ? 'Already at full power' : `Power ${L} → ${L + 1}`,
-    cost: 6 + L * 4, ok: L < MAX_LEVEL, color: w.color,
+    name: L >= MAX_LEVEL ? `The ${w.name} is at grade X` : `Grade the ${w.name} up to ${ROMAN[L + 1]}`,
+    desc: L >= MAX_LEVEL ? 'Nothing more the ship can do for it.' : 'More bolts per pull, and they hit harder.',
+    cost: 6 + L * 4, ok: L < MAX_LEVEL,
     buy() { G.level++; },
   });
   for (const k in WEAPONS) {
     if (k === G.weapon) continue;
     items.push({
-      name: `Refit: ${WEAPONS[k].name}`, desc: WEAPONS[k].blurb + '. Keeps your power level.',
-      cost: 12, ok: true, color: WEAPONS[k].color,
+      name: `Swap to the ${WEAPONS[k].name}`, desc: `${WEAPONS[k].blurb[0].toUpperCase() + WEAPONS[k].blurb.slice(1)}. Keeps its grade.`,
+      cost: 12, ok: true,
       buy() { G.weapon = k; },
     });
   }
   items.push({
-    name: 'Patch the hull', desc: G.hull >= MAX_HULL ? 'Hull is as thick as it gets' : '+1 hull plate',
-    cost: 22, ok: G.hull < MAX_HULL, color: '#7dffb0',
+    name: 'An extra hull plate', desc: G.hull >= MAX_HULL ? 'The sphere cannot take any more.' : 'One more hit before the water gets in.',
+    cost: 22, ok: G.hull < MAX_HULL,
     buy() { G.hull++; },
   });
   items.push({
-    name: 'Sonar charge', desc: G.sonar >= MAX_SONAR ? 'Rack is full' : '+1 blast that clears the water',
-    cost: 14, ok: G.sonar < MAX_SONAR, color: '#4de1ff',
+    name: 'A sonar charge', desc: G.sonar >= MAX_SONAR ? 'The rack is full.' : 'One blast that clears the water around you.',
+    cost: 14, ok: G.sonar < MAX_SONAR,
     buy() { G.sonar++; },
   });
   return items;
 }
 
 function renderDock() {
-  $('dockDepth').textContent = G.depth.toLocaleString('en-US') + ' m';
+  $('dockDepth').textContent = G.depth.toLocaleString('en-US');
   $('dockPearls').textContent = G.pearls;
   const list = $('dockItems');
   list.textContent = '';
   dockItems().forEach((it, i) => {
     const btn = document.createElement('button');
     btn.className = 'item';
-    const afford = G.pearls >= it.cost;
     if (!it.ok) btn.classList.add('maxed');
-    else if (!afford) btn.classList.add('cant');
-    btn.style.setProperty('--ic', it.color);
-    btn.innerHTML = `<kbd class="desktop-only">${i + 1}</kbd><span class="item-text"><b></b><small></small></span><span class="price"><i class="pearl"></i><span></span></span>`;
+    else if (G.pearls < it.cost) btn.classList.add('cant');
+    btn.innerHTML = '<span class="letter"></span><span class="item-text"><b></b><small></small></span><span class="price"></span>';
+    btn.querySelector('.letter').textContent = 'abcde'[i] + ')';
     btn.querySelector('b').textContent = it.name;
     btn.querySelector('small').textContent = it.desc;
-    btn.querySelector('.price span').textContent = it.ok ? it.cost : '—';
+    btn.querySelector('.price').textContent = it.ok ? `${it.cost} pearls` : '';
     btn.addEventListener('click', () => buyItem(i));
     list.appendChild(btn);
   });
@@ -995,6 +1004,65 @@ function leaveDock() {
   state = 'playing';
   lastT = performance.now();
   showScreen(null);
+}
+
+// ---------------------------------------------------------------- the field book
+
+const speciesLog = new Set(Store.get('lf_species', []));
+let plateTimer = null;
+
+function drawSpecimen(cv, kind, known) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = cv.clientWidth || 96;
+  cv.width = Math.round(size * dpr);
+  cv.height = Math.round(size * dpr);
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, size, size);
+  if (!known) {
+    c.strokeStyle = 'rgba(232,238,230,0.35)';
+    c.setLineDash([3, 5]);
+    c.strokeRect(6.5, 6.5, size - 13, size - 13);
+    return;
+  }
+  const sp = Sprites.sea[kind].frames[0][0];
+  const k = (size - 12) / Math.max(sp.w, sp.h);
+  c.drawImage(sp.c, (size - sp.w * k) / 2, (size - sp.h * k) / 2, sp.w * k, sp.h * k);
+}
+
+function renderPlates() {
+  const grid = $('plateGrid');
+  grid.textContent = '';
+  const kinds = Object.keys(SPECIES);
+  $('speciesCount').textContent = `${speciesLog.size} of ${kinds.length}`;
+  for (const kind of kinds) {
+    const known = speciesLog.has(kind);
+    const fig = document.createElement('figure');
+    fig.className = 'plate' + (known ? '' : ' unknown');
+    const cv = document.createElement('canvas');
+    const cap = document.createElement('figcaption');
+    cap.textContent = known ? SPECIES[kind].latin : 'not yet seen';
+    fig.append(cv, cap);
+    grid.appendChild(fig);
+    drawSpecimen(cv, kind, known);
+  }
+}
+
+// The first time a species dies in front of the window, it goes in the book.
+function logSpecies(kind) {
+  if (!SPECIES[kind] || speciesLog.has(kind)) return;
+  speciesLog.add(kind);
+  Store.set('lf_species', [...speciesLog]);
+  const sp = SPECIES[kind];
+  const toast = $('plateToast');
+  $('toastLatin').textContent = sp.latin;
+  $('toastCommon').textContent = `${sp.common}, logged at ${G.depth.toLocaleString('en-US')} ft`;
+  $('toastNote').textContent = sp.note;
+  toast.classList.remove('hidden');
+  drawSpecimen($('toastCanvas'), kind, true);
+  Sound.sfx.logged();
+  clearTimeout(plateTimer);
+  plateTimer = setTimeout(() => toast.classList.add('hidden'), 5200);
 }
 
 function syncToggles() {
@@ -1047,6 +1115,11 @@ function frame(now) {
     if ((G.waveState === 'clear' && G.waveT > 1.2) || (G.waveState === 'intro' && G.waveT < 1.4 && G.wave > 1)) sinking = 1;
   }
   if (state !== 'paused') Background.update(dt, sinking);
+  Sound.setDepth(Background.shown);
+  if (G && state === 'playing' && G.depth >= 1600) {
+    G.creakT -= dt;
+    if (G.creakT <= 0) { G.creakT = rand(7, 15); Sound.sfx.creak(); }
+  }
   render();
   if (G && (state === 'playing' || state === 'paused')) updateHud();
   requestAnimationFrame(frame);

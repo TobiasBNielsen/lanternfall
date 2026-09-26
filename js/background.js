@@ -1,12 +1,12 @@
 'use strict';
 
-// Water column: colour and light depend on how deep the sub is.
+// Depth is in feet, like the 1934 dives. Each zone is a deeper exposure of the same blue.
 const ZONES = [
-  { from: 0, name: 'Sunlight Zone', top: '#1b6a88', bot: '#0a2d48', rays: 1 },
-  { from: 800, name: 'Twilight Zone', top: '#0e3a5a', bot: '#061a2e', rays: 0.45 },
-  { from: 1600, name: 'Midnight Zone', top: '#07182b', bot: '#030b16', rays: 0.1 },
-  { from: 2800, name: 'The Abyss', top: '#050b16', bot: '#02050b', rays: 0 },
-  { from: 4400, name: 'Hadal Trench', top: '#05040d', bot: '#010103', rays: 0 },
+  { from: 0, name: 'sunlit water', top: '#3569b3', bot: '#23518f', rays: 1 },
+  { from: 800, name: 'the twilight', top: '#23518f', bot: '#183b73', rays: 0.4 },
+  { from: 2400, name: 'the midnight water', top: '#14305f', bot: '#0d2148', rays: 0.08 },
+  { from: 5000, name: 'the abyss', top: '#0c1c40', bot: '#08132d', rays: 0 },
+  { from: 9000, name: 'the trench', top: '#070f25', bot: '#040918', rays: 0 },
 ];
 
 function zoneAt(depth) {
@@ -27,8 +27,8 @@ const Background = {
   shown: 0, // eased depth used for colours
   sink: 0,
   t: 0,
-  bgGrad: null,
   vignette: null,
+  print: null, // the uneven exposure of a hand-coated cyanotype sheet
 
   init() {
     this.resize();
@@ -44,10 +44,46 @@ const Background = {
       this.snow.push({
         x: rand(W), y: rand(H), layer,
         speed: [10, 22, 40][layer] * rand(0.8, 1.2),
-        size: [1, 1.6, 2.4][layer],
+        size: [1, 1.5, 2.2][layer],
         ph: rand(TAU),
       });
     }
+    this.buildPrint();
+  },
+
+  // Blotchy exposure, brush streaks and ragged edges, painted once per resize.
+  buildPrint() {
+    const { W, H } = View;
+    const c = makeCanvas(Math.ceil(W / 2), Math.ceil(H / 2));
+    const x = c.getContext('2d');
+    x.scale(0.5, 0.5);
+    for (let i = 0; i < 26; i++) {
+      const cx = rand(W), cy = rand(H), r = rand(120, 380);
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const light = chance(0.5);
+      g.addColorStop(0, light ? 'rgba(232,238,230,0.05)' : 'rgba(0,6,24,0.10)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g;
+      x.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    // long horizontal brush strokes from coating the paper
+    for (let i = 0; i < 40; i++) {
+      const y = rand(H), h = rand(2, 9);
+      x.fillStyle = chance(0.5) ? 'rgba(232,238,230,0.025)' : 'rgba(0,6,24,0.05)';
+      x.fillRect(rand(-100, W * 0.3), y, rand(W * 0.5, W * 1.2), h);
+    }
+    // ragged, under-exposed border where the brush didn't reach
+    x.fillStyle = 'rgba(232,238,230,0.07)';
+    for (const side of [0, 1]) {
+      x.beginPath();
+      const ex = side ? W : 0, dir = side ? -1 : 1;
+      x.moveTo(ex, 0);
+      for (let y = 0; y <= H; y += 18) x.lineTo(ex + dir * (rand(4, 16) + (y % 90 < 18 ? rand(6, 14) : 0)), y);
+      x.lineTo(ex, H);
+      x.closePath();
+      x.fill();
+    }
+    this.print = c;
   },
 
   newSpire(initial) {
@@ -71,7 +107,7 @@ const Background = {
     this.shown = lerp(this.shown, this.depth, Math.min(1, dt * 0.8));
     const boost = 1 + this.sink * 8;
     const { W, H } = View;
-    // the sub sinks, so everything in the water drifts upwards past it
+    // the sphere sinks, so everything in the water drifts upwards past it
     for (const s of this.snow) {
       s.y -= s.speed * boost * dt;
       s.x += Math.sin(this.t * 0.6 + s.ph) * 6 * dt;
@@ -84,8 +120,8 @@ const Background = {
     }
   },
 
-  // 0 near the surface, up to ~0.85 in the trench
-  darkness() { return clamp((this.shown - 900) / 3000, 0, 0.85); },
+  // 0 in the upper water, up to ~0.85 in the trench
+  darkness() { return clamp((this.shown - 1600) / 6000, 0, 0.85); },
 
   colors() {
     const d = this.shown;
@@ -105,37 +141,35 @@ const Background = {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    // light shafts from the surface
+    // pale shafts where the sunlight still gets through
     if (c.rays > 0.01) {
-      ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 5; i++) {
-        const cx = W * (0.1 + i * 0.2) + Math.sin(this.t * 0.25 + i * 1.7) * 60;
-        const w = 60 + (i % 3) * 40;
-        const a = (0.05 + 0.03 * Math.sin(this.t * 0.7 + i)) * c.rays;
-        const rg = ctx.createLinearGradient(0, 0, 0, H * 0.9);
-        rg.addColorStop(0, `rgba(190,240,255,${a})`);
-        rg.addColorStop(1, 'rgba(190,240,255,0)');
+      for (let i = 0; i < 4; i++) {
+        const cx = W * (0.12 + i * 0.26) + Math.sin(this.t * 0.2 + i * 1.7) * 50;
+        const w = 50 + (i % 3) * 36;
+        const a = (0.05 + 0.02 * Math.sin(this.t * 0.6 + i)) * c.rays;
+        const rg = ctx.createLinearGradient(0, 0, 0, H * 0.85);
+        rg.addColorStop(0, `rgba(232,238,230,${a})`);
+        rg.addColorStop(1, 'rgba(232,238,230,0)');
         ctx.fillStyle = rg;
         ctx.beginPath();
         ctx.moveTo(cx - w * 0.3, 0); ctx.lineTo(cx + w * 0.3, 0);
-        ctx.lineTo(cx + w * 1.4 + 120, H * 0.9); ctx.lineTo(cx - w * 0.2 + 120, H * 0.9);
+        ctx.lineTo(cx + w * 1.3 + 110, H * 0.85); ctx.lineTo(cx - w * 0.2 + 110, H * 0.85);
         ctx.closePath(); ctx.fill();
       }
-      ctx.globalCompositeOperation = 'source-over';
     }
 
     for (const p of this.spires) {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.scale(p.flip, 1);
-      drawSprite(ctx, p.sp, 0, 0, 0, p.s, 0.35);
+      drawSprite(ctx, p.sp, 0, 0, 0, p.s, 0.22);
       ctx.restore();
     }
 
     const k = this.sink;
-    ctx.fillStyle = '#cfe9f2';
+    ctx.fillStyle = '#e8eee6';
     for (const s of this.snow) {
-      ctx.globalAlpha = s.layer === 0 ? 0.25 : 0.45;
+      ctx.globalAlpha = s.layer === 0 ? 0.22 : 0.4;
       if (k > 0.05) {
         const len = s.speed * k * 0.2 + s.size;
         ctx.fillRect(s.x - s.size / 2, s.y, s.size, len);
@@ -144,13 +178,14 @@ const Background = {
       }
     }
     ctx.globalAlpha = 1;
+    if (this.print) ctx.drawImage(this.print, 0, 0, W, H);
   },
 
   buildOverlays(ctx) {
     const { W, H } = View;
-    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75);
     v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, 'rgba(0,4,10,0.55)');
+    v.addColorStop(1, 'rgba(3,9,26,0.45)');
     this.vignette = v;
   },
 };
