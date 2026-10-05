@@ -12,6 +12,7 @@ window.addEventListener('keydown', e => {
   if (MOVE_KEYS.includes(e.code)) Input.mode = 'keys';
   if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
+  if (Ads.busy) return; // an advert is playing
   if (state === 'playing') {
     if (e.code === 'KeyM' || e.code === 'KeyX' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') launchSonar();
     if (e.code === 'KeyP' || e.code === 'Escape') pauseGame();
@@ -22,9 +23,12 @@ window.addEventListener('keydown', e => {
     if (m) buyItem(+m[1] - 1);
     const l = /^Key([A-E])$/.exec(e.code);
     if (l) buyItem(l[1].charCodeAt(0) - 65);
+    if (e.code === 'KeyF' || e.code === 'Digit6') takeReward();
     if (e.code === 'Enter') leaveDock();
-  } else if (state === 'menu' || state === 'gameover') {
+  } else if (state === 'menu') {
     if (e.code === 'Enter') startGame();
+  } else if (state === 'gameover') {
+    if (e.code === 'Enter') leaveLastEntry(startGame);
   }
 });
 window.addEventListener('keyup', e => { Input.keys[e.code] = false; });

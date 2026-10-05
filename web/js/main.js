@@ -35,6 +35,7 @@ function boot() {
   buildMenuSchool();
   refreshBest();
   syncToggles();
+  Ads.init().then(() => { if (state === 'menu') Ads.showBanner(); });
   if (window.matchMedia('(pointer: coarse)').matches) {
     Input.mode = 'touch';
     document.body.classList.add('touch');

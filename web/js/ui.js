@@ -79,6 +79,8 @@ function startGame() {
   Input.mx = G.player.x; Input.my = G.player.y;
   Input.mouseDown = false;
   state = 'playing';
+  Ads.hideBanner();
+  Ads.gameplay(true);
   showScreen(null);
   hint('steer');
 }
@@ -86,6 +88,7 @@ function startGame() {
 function pauseGame() {
   if (state !== 'playing') return;
   state = 'paused';
+  Ads.gameplay(false);
   Input.mouseDown = false;
   $('pauseDepth').textContent = G.depth.toLocaleString('en-US');
   showScreen('pause');
@@ -95,6 +98,7 @@ function resumeGame() {
   if (state !== 'paused') return;
   Sound.init();
   state = 'playing';
+  Ads.gameplay(true);
   lastT = performance.now();
   showScreen(null);
 }
@@ -107,10 +111,13 @@ function toMenu() {
   Sound.Music.setMode('calm');
   refreshBest();
   showScreen('menu');
+  Ads.gameplay(false);
+  Ads.showBanner();
 }
 
 function gameOver() {
   state = 'gameover';
+  Ads.gameplay(false);
   clearHints();
   const best = loadBest();
   const record = G.score > best.score;
@@ -125,6 +132,15 @@ function gameOver() {
   logDive({ score: G.score, depth: G.depth, kills: G.kills, species: speciesLog.size, duration: Math.round(G.playTime) }, G.diveReq);
   Sound.Music.setMode('calm');
   showScreen('gameover');
+}
+
+// Leaving the last entry is the one place a full-screen advert may come; the score is already logged.
+let leavingLastEntry = false;
+async function leaveLastEntry(next) {
+  if (state !== 'gameover' || leavingLastEntry) return;
+  leavingLastEntry = true;
+  try { await Ads.interstitial(); } finally { leavingLastEntry = false; }
+  if (state === 'gameover') next();
 }
 
 // ---------------------------------------------------------------- the dock (shop between waves)
@@ -177,10 +193,23 @@ function renderDock() {
     btn.addEventListener('click', () => buyItem(i));
     list.appendChild(btn);
   });
+  // A word from the sponsor: one advert per stop, only when the network has one ready
+  if (Ads.canReward() && !G.rewardTaken) {
+    const btn = document.createElement('button');
+    btn.className = 'item';
+    btn.innerHTML = '<span class="letter">f)</span><span class="item-text"><b></b><small></small></span><span class="price">free</span>';
+    btn.querySelector('b').textContent = '▶ A word from the sponsor';
+    btn.querySelector('small').textContent = 'Watch a short advert and the ship adds 15 pearls to the basket.';
+    btn.addEventListener('click', takeReward);
+    list.appendChild(btn);
+  }
 }
 
 function openDock() {
   state = 'dock';
+  G.rewardTaken = false;
+  Ads.gameplay(false);
+  Ads.offerReward(() => { if (state === 'dock') renderDock(); });
   G.oxygen = 100;
   Input.mouseDown = false;
   G.shots.length = 0;
@@ -192,7 +221,7 @@ function openDock() {
 }
 
 function buyItem(i) {
-  if (state !== 'dock') return;
+  if (state !== 'dock' || Ads.busy) return;
   const it = dockItems()[i];
   if (!it) return;
   if (!it.ok || G.pearls < it.cost) { Sound.sfx.deny(); return; }
@@ -204,14 +233,32 @@ function buyItem(i) {
 }
 
 function leaveDock() {
-  if (state !== 'dock') return;
+  if (state !== 'dock' || Ads.busy) return;
   Sound.sfx.click();
   Sound.Music.setMode('normal');
   startWave(G.wave + 1);
   G.player.invuln = Math.max(G.player.invuln, 1);
   state = 'playing';
+  Ads.gameplay(true);
   lastT = performance.now();
   showScreen(null);
+}
+
+const SPONSOR_PEARLS = 15;
+
+async function takeReward() {
+  if (state !== 'dock' || G.rewardTaken || Ads.busy || !Ads.canReward()) return;
+  const watched = await Ads.rewarded();
+  if (state !== 'dock') return;
+  if (watched) {
+    G.pearls += SPONSOR_PEARLS;
+    G.rewardTaken = true;
+    Sound.sfx.buy();
+    for (const k in hudCache) delete hudCache[k];
+  } else {
+    Sound.sfx.deny();
+  }
+  renderDock();
 }
 
 // ---------------------------------------------------------------- the deepest dives
@@ -478,8 +525,8 @@ function syncToggles() {
 }
 
 $('playBtn').addEventListener('click', startGame);
-$('againBtn').addEventListener('click', startGame);
-$('goMenuBtn').addEventListener('click', toMenu);
+$('againBtn').addEventListener('click', () => leaveLastEntry(startGame));
+$('goMenuBtn').addEventListener('click', () => leaveLastEntry(toMenu));
 $('resumeBtn').addEventListener('click', resumeGame);
 $('restartBtn').addEventListener('click', startGame);
 $('quitBtn').addEventListener('click', toMenu);

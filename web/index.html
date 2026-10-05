@@ -13,7 +13,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2275526476267750" crossorigin="anonymous"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -110,6 +109,11 @@
         <h2>The field book <span class="count" id="speciesCount">0 of 12</span></h2>
         <div id="plateGrid" class="plate-grid"></div>
       </section>
+
+      <aside id="adBanner" class="ad-banner hidden" aria-label="Advertisement">
+        <p class="ad-label">Advertisement</p>
+        <div id="adSlot" class="ad-slot"></div>
+      </aside>
     </div>
   </div>
 
@@ -165,6 +169,8 @@
   </div>
 
   <script src="js/util.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/ads.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/background.js"></script>
