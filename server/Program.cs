@@ -5,6 +5,13 @@ using System.Threading.RateLimiting;
 using Lanternfall.Server;
 using Microsoft.AspNetCore.RateLimiting;
 
+// Temporary: leave a trace of how far start-up gets on the server.
+var traceFile = Path.Combine(AppContext.BaseDirectory, "logs", "trace.txt");
+void Trace(string msg) { try { File.AppendAllText(traceFile, $"{DateTime.UtcNow:O} {msg}{Environment.NewLine}"); } catch { } }
+Trace("main entered");
+AppDomain.CurrentDomain.UnhandledException += (_, e) => Trace("unhandled: " + e.ExceptionObject);
+try {
+
 // Published, the game sits in wwwroot next to the app. In development it is read straight from ../web.
 var contentRoot = AppContext.BaseDirectory;
 var webRoot = Path.Combine(contentRoot, "wwwroot");
@@ -145,7 +152,9 @@ api.MapGet("/board", (HttpContext ctx, Db db, int? limit) =>
 
 api.MapFallback(() => Refuse(404, "The ship does not know that signal."));
 
+Trace("running");
 app.Run();
+} catch (Exception e) { Trace("startup failed: " + e); throw; }
 
 // Walk up from where `dotnet run` was started until the repository's web folder turns up.
 static string FindDevWebRoot(string from)
