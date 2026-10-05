@@ -60,5 +60,6 @@ jobs:
         run: |
           curl -s -o /dev/null --resolve lanternfall.bockersoftware.dk:80:94.231.106.196 -A "Mozilla/5.0 Chrome/130" http://lanternfall.bockersoftware.dk/ || true
           sleep 5
+          mkdir -p /tmp/lflogs
           lftp -u "${{ vars.FTP_USER }},$FTP_PASSWORD" "${{ vars.FTP_HOST }}" -e "set ftp:ssl-force true; cd ${{ vars.FTP_DIR }}/logs; ls; mget -O /tmp/lflogs *; bye" || true
           for f in /tmp/lflogs/*; do echo "== $f"; cat "$f"; done; echo "" || true
