@@ -74,6 +74,7 @@ function startGame() {
   Sound.sfx.click();
   Sound.Music.setMode('normal');
   resetGame();
+  G.diveReq = Leaderboard.start();
   for (const k in hudCache) delete hudCache[k];
   Input.mx = G.player.x; Input.my = G.player.y;
   Input.mouseDown = false;
@@ -121,14 +122,7 @@ function gameOver() {
   $('goScore').textContent = G.score.toLocaleString('en-US');
   $('goBest').textContent = record ? 'That is the best dive in the log.' : `The best dive in the log is still ${best.score.toLocaleString('en-US')}.`;
   $('goSpecies').textContent = `${speciesLog.size} of ${Object.keys(SPECIES).length}`;
-  lastDive = { score: G.score, depth: G.depth, kills: G.kills, species: speciesLog.size, duration: Math.round(G.playTime) };
-  const form = $('signForm');
-  form.classList.toggle('hidden', G.score <= 0);
-  form.classList.remove('done');
-  $('signName').value = Store.get('lf_name', '');
-  $('signStatus').textContent = '';
-  $('signStatus').classList.remove('err');
-  $('signBtn').disabled = false;
+  logDive({ score: G.score, depth: G.depth, kills: G.kills, species: speciesLog.size, duration: Math.round(G.playTime) }, G.diveReq);
   Sound.Music.setMode('calm');
   showScreen('gameover');
 }
@@ -222,11 +216,33 @@ function leaveDock() {
 
 // ---------------------------------------------------------------- the deepest dives
 
-let lastDive = null;
+let lastResult = null;
+let diveSeq = 0;
 
 function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function placeText(best, personalBest) {
+  if (!best) return 'Signed.';
+  return `That puts you ${ordinal(best.rank)} in the log${personalBest ? ', and it is your best dive yet' : ''}.`;
+}
+
+function setStatus(el, text, err = false) {
+  el.textContent = text;
+  el.classList.toggle('err', err);
+}
+
+function boardRow(r) {
+  const li = document.createElement('li');
+  if (r.me) li.className = 'me';
+  li.innerHTML = '<span class="n"></span><span class="who"></span><span class="dep"></span><span class="pts"></span>';
+  li.querySelector('.n').textContent = r.rank + '.';
+  li.querySelector('.who').textContent = r.name;
+  li.querySelector('.dep').textContent = r.depth.toLocaleString('en-US') + ' m';
+  li.querySelector('.pts').textContent = r.score.toLocaleString('en-US');
+  return li;
 }
 
 async function renderBoard() {
@@ -238,50 +254,110 @@ async function renderBoard() {
     li.textContent = text;
     list.appendChild(li);
   };
+  renderSignedAs();
   try {
-    const rows = await Leaderboard.top(10);
-    if (!rows || !rows.length) { note('Nobody has signed the log yet. Be the first.'); return; }
-    const mine = Store.get('lf_name', '');
+    const b = await Leaderboard.board(10);
+    if (!b.top.length) { note('Nobody has signed the log yet. Be the first.'); return; }
     list.textContent = '';
-    rows.forEach((r, i) => {
-      const li = document.createElement('li');
-      if (mine && r.name === mine) li.className = 'me';
-      li.innerHTML = '<span class="n"></span><span class="who"></span><span class="dep"></span><span class="pts"></span>';
-      li.querySelector('.n').textContent = i + 1 + '.';
-      li.querySelector('.who').textContent = r.name;
-      li.querySelector('.dep').textContent = r.depth.toLocaleString('en-US') + ' m';
-      li.querySelector('.pts').textContent = r.score.toLocaleString('en-US');
-      list.appendChild(li);
-    });
+    b.top.forEach(r => list.appendChild(boardRow(r)));
+    // your own place, even when it is a long way down the log
+    if (b.me) {
+      const gap = document.createElement('li');
+      gap.className = 'gap';
+      gap.textContent = '⋮';
+      list.appendChild(gap);
+      list.appendChild(boardRow({ ...b.me, me: true }));
+    }
   } catch (e) {
     note(`${e.message} The log will be here when the line is back.`);
   }
 }
 
+// The line under the board: who you sign as, and a way to change it.
+function renderSignedAs() {
+  const name = Store.get('lf_name', '');
+  const line = $('signedAs');
+  $('nameForm').classList.add('hidden');
+  if (!name || !Store.get('lf_signed', false)) { line.classList.add('hidden'); return; }
+  line.classList.remove('hidden');
+  const text = $('signedAsText');
+  text.textContent = 'You sign the log as ';
+  const b = document.createElement('b');
+  b.textContent = name;
+  text.append(b, '.');
+}
+
+$('renameBtn').addEventListener('click', () => {
+  $('signedAs').classList.add('hidden');
+  $('nameForm').classList.remove('hidden');
+  $('nameInput').value = Store.get('lf_name', '');
+  setStatus($('nameStatus'), '');
+  $('nameInput').focus();
+});
+
+// Signing is a name, not a dive: once a diver has one, every dive goes in by itself.
+async function signAs(name, status) {
+  name = name.trim().replace(/\s+/g, ' ');
+  if (!name) return null;
+  setStatus(status, 'Sending it up to the ship…');
+  try {
+    const r = await Leaderboard.rename(name);
+    Store.set('lf_name', r.name);
+    Store.set('lf_signed', true);
+    Sound.sfx.logged();
+    return r;
+  } catch (err) {
+    setStatus(status, err.message, true);
+    return null;
+  }
+}
+
+$('nameForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const r = await signAs($('nameInput').value, $('nameStatus'));
+  if (r) renderBoard();
+});
+
+// Send the finished dive up. Named divers are signed straight away; the others are asked for a name once.
+async function logDive(dive, diveReq) {
+  const seq = ++diveSeq;
+  const form = $('signForm'), status = $('signStatus');
+  lastResult = null;
+  form.classList.toggle('hidden', dive.score <= 0);
+  form.classList.add('done');
+  $('signBtn').disabled = false;
+  if (dive.score <= 0) return;
+  setStatus(status, 'Sending it up to the ship…');
+  try {
+    const id = await diveReq;
+    if (!id) throw new Error('There was no line to the ship when this dive began, so it cannot go in the log.');
+    const r = await Leaderboard.finish(id, dive);
+    if (seq !== diveSeq) return;
+    lastResult = r;
+    if (r.name) {
+      Store.set('lf_name', r.name);
+      Store.set('lf_signed', true);
+      setStatus(status, `Signed as ${r.name}. ${placeText(r.best, r.personalBest)}`);
+      Sound.sfx.logged();
+    } else {
+      setStatus(status, '');
+      $('signName').value = Store.get('lf_name', '');
+      form.classList.remove('done');
+    }
+  } catch (err) {
+    if (seq === diveSeq) setStatus(status, err.message, true);
+  }
+}
+
 $('signForm').addEventListener('submit', async e => {
   e.preventDefault();
-  if (!lastDive) return;
-  const name = $('signName').value.trim().replace(/\s+/g, ' ');
-  const status = $('signStatus');
-  if (!name) return;
-  Store.set('lf_name', name);
+  if (!lastResult) return;
   $('signBtn').disabled = true;
-  status.classList.remove('err');
-  status.textContent = 'Sending it up to the ship…';
-  try {
-    const r = await Leaderboard.submit({ ...lastDive, name });
-    lastDive = null;
-    $('signForm').classList.add('done');
-    const rank = r ? Number(r.rank) : 0;
-    status.textContent = rank
-      ? `Signed. That puts you ${ordinal(rank)} in the log${r.personal_best ? ', and it is your best dive yet' : ''}.`
-      : 'Signed.';
-    Sound.sfx.logged();
-  } catch (err) {
-    status.classList.add('err');
-    status.textContent = err.message;
-    $('signBtn').disabled = false;
-  }
+  const r = await signAs($('signName').value, $('signStatus'));
+  $('signBtn').disabled = false;
+  if (!r) return;
+  $('signForm').classList.add('done');
+  setStatus($('signStatus'), `Signed as ${r.name}. ${placeText(r.best, lastResult.personalBest)}`);
 });
 
 // ---------------------------------------------------------------- first-dive notes

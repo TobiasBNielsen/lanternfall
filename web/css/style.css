@@ -181,7 +181,13 @@ b { font-weight: 700; }
 .sign input:focus { outline: none; border-bottom-color: var(--amber); }
 .sign-status { min-height: 1.2em; color: var(--paper); }
 .sign-status.err { color: var(--amber); }
-.sign.done .sign-row { display: none; }
+.sign.done .sign-row, .sign.done label { display: none; }
+.board .sign { margin-top: 14px; }
+.signed-as { margin-top: 10px; font-size: 13px; color: var(--paper-dim); }
+.signed-as b { font-family: var(--fell); font-style: italic; font-weight: normal; font-size: 16px; color: var(--paper); }
+.link { font-size: 13px; color: var(--paper-dim); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.link:hover { color: var(--paper); }
+.board-list li.gap { display: block; color: var(--paper-faint); border: 0; padding: 0; text-align: center; }
 
 /* ------------------------------------------------------------ dock */
 

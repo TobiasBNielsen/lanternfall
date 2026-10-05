@@ -71,6 +71,15 @@
       <section class="board">
         <h2>The deepest dives</h2>
         <ol id="boardList" class="board-list"><li class="board-note">Asking the ship&hellip;</li></ol>
+        <p class="signed-as hidden" id="signedAs"><span id="signedAsText"></span> <button type="button" id="renameBtn" class="link">change</button></p>
+        <form id="nameForm" class="sign hidden" autocomplete="off">
+          <label for="nameInput">The name your dives go in the log under. Nobody else can take it.</label>
+          <div class="sign-row">
+            <input id="nameInput" name="name" maxlength="16" placeholder="your name" spellcheck="false" required>
+            <button type="submit" class="plain">Sign</button>
+          </div>
+          <p class="sign-status" id="nameStatus" aria-live="polite"></p>
+        </form>
       </section>
 
       <section class="notes">
@@ -140,8 +149,8 @@
       <p class="score-line">Score for the dive: <b id="goScore">0</b></p>
       <p class="prose small" id="goBest"></p>
       <form id="signForm" class="sign" autocomplete="off">
-        <label for="signName">Sign the log, so the others can see how deep you went.</label>
-        <div class="sign-row">
+        <label for="signName" id="signLabel">Sign the log, so the others can see how deep you went. You only sign once; after that every dive goes in by itself.</label>
+        <div class="sign-row" id="signRow">
           <input id="signName" name="name" maxlength="16" placeholder="your name" spellcheck="false" required>
           <button type="submit" id="signBtn" class="plain">Sign</button>
         </div>

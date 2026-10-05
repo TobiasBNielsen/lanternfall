@@ -18,7 +18,7 @@ Notes from a descent. A deep-sea shooter for the browser, drawn like a 1930s cya
   - *The Colony*, twelve meters of bells behind a float. Only the last bell can be cut, and the float waits for the end.
 - **Sixteen waves to a cycle** with ten kinds of creature, among them chain colonies that come apart bell by bell, silver hatchets that cross in pairs, gulpers that drag the sphere toward their open mouths (and can only be hurt while open), and fire-tubes that break into three.
 - **The field book.** The first time you take a new species it goes in the book as a plate, with its name and a line of notes. Twelve to find.
-- **The deepest dives.** Sign the log when a dive ends and your best score goes on the shared leaderboard on the title page.
+- **The deepest dives.** Sign the log once with a name, and from then on every dive goes on the shared leaderboard by itself. Names are reserved: nobody else can sign as you. Your own place shows on the title page even when you are far down the log.
 
 ## Look and feel
 
@@ -39,32 +39,42 @@ Notes from a descent. A deep-sea shooter for the browser, drawn like a 1930s cya
 
 ## Running locally
 
-No build step and no dependencies. Serve the folder with any static web server:
+The game itself has no build step and no dependencies. The leaderboard is a small ASP.NET Core app that also serves the game. With the .NET 10 SDK installed:
 
 ```bash
-python -m http.server 8000
+dotnet run --project server --urls http://localhost:5080
 ```
 
-Then open http://localhost:8000.
+Then open http://localhost:5080. The leaderboard is kept in `App_Data/lanternfall.db` (SQLite) next to the built app.
+
+## Hosting
+
+The game runs on a Simply.com web hotel (Windows/IIS) at https://lanternfall.bockersoftware.dk, in the folder `/lanternfall`. Every push to `main` publishes the app self-contained for `win-x86` (Simply's requirement) and uploads the changed files over FTPS (`.github/workflows/deploy.yml`). While files are replaced, `app_offline.htm` keeps visitors on a short "back in a minute" page. The database file is never uploaded or overwritten.
+
+The workflow uses the repository variables `FTP_HOST`, `FTP_USER` and `FTP_DIR` and the secret `FTP_PASSWORD`.
 
 ## Project structure
 
 ```
-index.html           Title page, HUD, supplies and field book
-css/style.css        Styling
-js/util.js           Math helpers, storage, viewport
-js/audio.js          Synthesized sound and music
-js/sprites.js        Procedural linework, hatching and stippling
-js/background.js     Water column, cyanotype texture, depth zones
-js/entities.js       Creatures, species notes, damage, pickups, particles
-js/weapons.js        The six weapons and how their shots behave
-js/waves.js          Wave definitions and movement patterns
-js/bosses.js         The krakens, the lantern queen and the colony
-js/leaderboard.js    Talks to the shared log of deepest dives
-js/core.js           Game state and one step of the simulation
-js/input.js          Mouse, keyboard and touch
-js/render.js         Everything drawn on the canvas
-js/ui.js             HUD, screens, supplies, field book, leaderboard UI
-js/main.js           Frame loop and start-up
-supabase/schema.sql  The leaderboard table and the functions that guard it
+web/index.html           Title page, HUD, supplies and field book
+web/css/style.css        Styling
+web/js/util.js           Math helpers, storage, viewport
+web/js/audio.js          Synthesized sound and music
+web/js/sprites.js        Procedural linework, hatching and stippling
+web/js/background.js     Water column, cyanotype texture, depth zones
+web/js/entities.js       Creatures, species notes, damage, pickups, particles
+web/js/weapons.js        The six weapons and how their shots behave
+web/js/waves.js          Wave definitions and movement patterns
+web/js/bosses.js         The krakens, the lantern queen and the colony
+web/js/leaderboard.js    Talks to the shared log of deepest dives
+web/js/core.js           Game state and one step of the simulation
+web/js/input.js          Mouse, keyboard and touch
+web/js/render.js         Everything drawn on the canvas
+web/js/ui.js             HUD, screens, supplies, field book, leaderboard UI
+web/js/main.js           Frame loop and start-up
+server/Program.cs        Serves the game and the leaderboard API
+server/Rules.cs          What a finished dive has to look like to go in the log
+server/Board.cs          Ranks divers by their best dive
+server/Db.cs             The SQLite file and its tables
+deploy/app_offline.htm   Shown while a new version is being uploaded
 ```
