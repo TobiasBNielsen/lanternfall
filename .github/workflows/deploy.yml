@@ -2,7 +2,7 @@ name: Deploy to Simply
 
 on:
   push:
-    branches: [main, move-to-simply]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
