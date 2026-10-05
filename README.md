@@ -53,6 +53,16 @@ The game runs on a Simply.com web hotel (Windows/IIS) at https://lanternfall.boc
 
 The workflow uses the repository variables `FTP_HOST`, `FTP_USER` and `FTP_DIR` and the secret `FTP_PASSWORD`.
 
+## Adverts
+
+`web/js/ads.js` shows adverts at three places: a rewarded advert in the supplies basket (15 pearls, once per stop), a full-screen advert when leaving the last entry, and a banner held at the foot of the title page. Never during a wave. Which network it uses is set in `web/js/config.js`:
+
+- **google** (this site): AdSense for the banner and H5 Games Ads for the rest. Set `h5: true` once H5 Games Ads is approved, and `bannerSlot` to the ad unit id. Add `?adtest=1` to the address to see test adverts. The consent message for EU visitors is Google's own (AdSense → Privacy & messaging).
+- **crazygames**: the CrazyGames SDK. Every push to `main` builds the CrazyGames package (`deploy/crazygames.sh`) and keeps it as the artifact `lanternfall-crazygames` on the workflow run. Download it and upload it in the CrazyGames developer portal. The leaderboard server allows calls from the domains in `Cors:OriginSuffixes` in `server/appsettings.json`.
+- **none**: no adverts.
+
+With an ad blocker, or with no advert to show, the game simply goes on. Run the tests with `node --test "tests/*.test.js"`.
+
 ## Project structure
 
 ```

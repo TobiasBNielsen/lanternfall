@@ -94,7 +94,7 @@ Regler, der gælder for alle udbydere:
 
 ### Titelsiden
 
-- `<div id="adBanner" class="ad-banner hidden">` i `#menu`, efter leaderboard-sektionen. Den har en tynd ramme i `--paper-faint` og en lille overline "Advertisement", så den tydeligt er adskilt fra spillets indhold. Den må ikke give vandret scroll ved 390 px.
+- `<aside id="adBanner" class="ad-banner hidden">` i `#menu`, holdt fast i bunden af skærmen (CrazyGames fylder kun et banner, der er helt synligt), og titelsiden får plads nedenunder, så intet skjules. Den har en tynd ramme i `--paper-faint` og en lille overline "Advertisement", så den tydeligt er adskilt fra spillets indhold. Den må ikke give vandret scroll ved 390 px.
 - `toMenu()` og den første visning kalder `Ads.showBanner()`, og `startGame()` kalder `Ads.hideBanner()`.
 
 ### Indlæsning (`web/index.html`)
