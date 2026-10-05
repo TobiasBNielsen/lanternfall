@@ -546,6 +546,8 @@ document.querySelectorAll('[data-toggle]').forEach(btn => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { pauseGame(); Sound.suspend(); }
-  else Sound.resume();
+  else Ads.resumeSound();
 });
 window.addEventListener('blur', pauseGame);
+// an advert that turns up late must not play over a running wave
+Ads.onLateAdvert = pauseGame;

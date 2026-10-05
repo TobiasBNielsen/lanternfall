@@ -17,18 +17,19 @@ function element(tagName) {
     tagName, dataset: {}, style: {}, attrs: {}, children: [],
     classList: { add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c) },
     setAttribute(k, v) { this.attrs[k] = v; },
+    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
     appendChild(c) { this.children.push(c); return c; },
   };
 }
 
-function load(config, { crazy, hidden = false, search = '' } = {}) {
+function load(config, { crazy, hidden = false, search = '', MutationObserver } = {}) {
   const sound = { suspended: 0, resumed: 0, suspend() { this.suspended++; }, resume() { this.resumed++; } };
   const byId = { adBanner: element('aside'), adSlot: element('div') };
   byId.adBanner.classList.add('hidden');
   const document = { hidden, head: element('head'), createElement: element, getElementById: id => byId[id] || null };
   const window = crazy ? { CrazyGames: { SDK: crazy } } : {};
   const ctx = vm.createContext({
-    CONFIG: config, Sound: sound, document, window, location: { hostname: 'example.com', search },
+    CONFIG: config, Sound: sound, document, window, location: { hostname: 'example.com', search }, MutationObserver,
     // looked up at call time so mock.timers can take over
     setTimeout: (...a) => globalThis.setTimeout(...a), clearTimeout: (...a) => globalThis.clearTimeout(...a),
   });
@@ -36,10 +37,10 @@ function load(config, { crazy, hidden = false, search = '' } = {}) {
   return { Ads: vm.runInContext('Ads', ctx), sound, document, window, byId };
 }
 
-// outcome: 'finish' | 'error' | 'startThenError' | 'silent'
+// outcome: 'finish' | 'error' | 'startThenError' | 'silent' | 'manual' (callbacks kept in sdk.cb)
 function fakeCrazy({ environment = 'crazygames', adblock = false, outcome = 'finish', bannerFails = false } = {}) {
   const calls = [];
-  return {
+  const sdk = {
     calls, environment,
     init: async () => {},
     ad: {
@@ -49,6 +50,7 @@ function fakeCrazy({ environment = 'crazygames', adblock = false, outcome = 'fin
         if (outcome === 'finish') { cb.adStarted(); cb.adFinished(); }
         if (outcome === 'error') cb.adError('unfilled');
         if (outcome === 'startThenError') { cb.adStarted(); cb.adError('other'); }
+        if (outcome === 'manual') this.owner.cb = cb;
       },
     },
     banner: {
@@ -57,6 +59,8 @@ function fakeCrazy({ environment = 'crazygames', adblock = false, outcome = 'fin
     },
     game: { gameplayStart() { calls.push('start'); }, gameplayStop() { calls.push('stop'); } },
   };
+  sdk.ad.owner = sdk;
+  return sdk;
 }
 
 const google = (over = {}) => ({ ads: 'google', api: 'api/', google: { client: 'ca-pub-1', h5: false, bannerSlot: null, ...over } });
@@ -313,4 +317,125 @@ test('google: a blocked script means no adverts, at once', async () => {
   assert.strictEqual(Ads.busy, false);
   await Ads.interstitial();
   assert.strictEqual(Ads.busy, false);
+});
+
+test('the game only takes its sound back when no advert is playing', async () => {
+  const sdk = fakeCrazy({ outcome: 'manual' });
+  const { Ads, sound } = load({ ads: 'crazygames', api: 'x' }, { crazy: sdk });
+  await Ads.init();
+  const reward = Ads.rewarded();
+  sdk.cb.adStarted();
+  Ads.resumeSound();
+  assert.strictEqual(sound.resumed, 0);
+  sdk.cb.adFinished();
+  await reward;
+  Ads.resumeSound();
+  assert.strictEqual(sound.resumed, 2);
+});
+
+test('an advert that starts after we gave up still silences and holds the game until it ends', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const sdk = fakeCrazy({ outcome: 'manual' });
+    const { Ads, sound } = load({ ads: 'crazygames', api: 'x' }, { crazy: sdk });
+    await Ads.init();
+    let held = 0;
+    Ads.onLateAdvert = () => { held++; };
+    const reward = Ads.rewarded();
+    mock.timers.tick(8000);
+    assert.strictEqual(await reward, false);
+    assert.strictEqual(Ads.busy, false);
+    sdk.cb.adStarted();
+    assert.strictEqual(Ads.busy, true);
+    assert.strictEqual(sound.suspended, 1);
+    assert.strictEqual(held, 1);
+    sdk.cb.adFinished();
+    assert.strictEqual(Ads.busy, false);
+    assert.strictEqual(sound.resumed, 1);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('the interstitial only waits 2 seconds for an advert to begin', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const { Ads } = load({ ads: 'crazygames', api: 'x' }, { crazy: fakeCrazy({ outcome: 'silent' }) });
+    await Ads.init();
+    let settled = false;
+    const shown = Ads.interstitial().then(() => { settled = true; });
+    mock.timers.tick(2000);
+    await shown;
+    assert.strictEqual(settled, true);
+    assert.strictEqual(Ads.busy, false);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('google: a blocked script hides a banner already on screen', async () => {
+  const { Ads, byId, document, window } = load(google({ bannerSlot: '123' }));
+  await Ads.init();
+  window.adsbygoogle = { push() {} };
+  Ads.showBanner();
+  assert.ok(!byId.adBanner.classList.contains('hidden'));
+  document.head.children[0].onerror();
+  assert.ok(byId.adBanner.classList.contains('hidden'));
+});
+
+test('google: an unfilled banner hides its frame', async () => {
+  let watch;
+  class FakeObserver { constructor(fn) { this.fn = fn; } observe(el) { watch = () => this.fn([], this); this.el = el; } disconnect() {} }
+  const { Ads, byId, window } = load(google({ bannerSlot: '123' }), { MutationObserver: FakeObserver });
+  await Ads.init();
+  window.adsbygoogle = { push() {} };
+  Ads.showBanner();
+  const ins = byId.adSlot.children[0];
+  ins.setAttribute('data-ad-status', 'unfilled');
+  watch();
+  assert.ok(byId.adBanner.classList.contains('hidden'));
+});
+
+test('google: every dock visit asks for a fresh rewarded advert', async () => {
+  const { Ads, window } = load(google({ h5: true }));
+  await Ads.init();
+  const asked = [];
+  window.adsbygoogle = { push: o => asked.push(o) };
+  Ads.offerReward(() => {});
+  asked[0].beforeReward(() => {});
+  Ads.offerReward(() => {});
+  assert.strictEqual(asked.length, 2);
+  assert.strictEqual(Ads.canReward(), false);
+});
+
+test('google: an offer that lapses takes its button away', async () => {
+  const { Ads, window } = load(google({ h5: true }));
+  await Ads.init();
+  let placement;
+  window.adsbygoogle = { push: o => { placement = o; } };
+  let ready = 0;
+  Ads.offerReward(() => { ready++; });
+  placement.beforeReward(() => {});
+  assert.strictEqual(Ads.canReward(), true);
+  placement.adBreakDone({ breakStatus: 'ignored' });
+  assert.strictEqual(Ads.canReward(), false);
+  assert.strictEqual(ready, 2);
+});
+
+test('google: a rewarded advert is used once, even if Google never answers', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const { Ads, window } = load(google({ h5: true }));
+    await Ads.init();
+    let placement;
+    window.adsbygoogle = { push: o => { placement = o; } };
+    Ads.offerReward(() => {});
+    placement.beforeReward(() => {});
+    const reward = Ads.rewarded();
+    assert.strictEqual(Ads.canReward(), false);
+    mock.timers.tick(8000);
+    assert.strictEqual(await reward, false);
+  } finally {
+    mock.timers.reset();
+  }
 });
