@@ -33,6 +33,17 @@ app.UseStaticFiles(new StaticFileOptions
     OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
 });
 
+// Simply's Let's Encrypt drops its challenge files in the site folder, outside wwwroot. They have no extension.
+var acme = Path.Combine(contentRoot, ".well-known", "acme-challenge");
+Directory.CreateDirectory(acme);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(acme),
+    RequestPath = "/.well-known/acme-challenge",
+    ServeUnknownFileTypes = true,
+    DefaultContentType = "text/plain",
+});
+
 var api = app.MapGroup("/api");
 
 // A new diver: an id that is shown to others never, and a secret that only this browser keeps.
