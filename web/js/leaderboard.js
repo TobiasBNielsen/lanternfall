@@ -16,7 +16,8 @@ const Leaderboard = (() => {
       }
       const res = await fetch(API + path, {
         method, headers, signal: ctrl.signal,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        // IIS refuses a POST without a length, so every write carries at least {}
+        body: method === 'GET' ? undefined : JSON.stringify(body === undefined ? {} : body),
       });
       const data = await res.json().catch(() => null);
       if (res.status === 401 && auth) {
