@@ -12,6 +12,14 @@ if (!Directory.Exists(webRoot)) webRoot = FindDevWebRoot(Directory.GetCurrentDir
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = contentRoot, WebRootPath = webRoot });
 builder.Services.AddSingleton(new Db(Path.Combine(contentRoot, "App_Data", "lanternfall.db")));
+// The game on CrazyGames runs on their domains and calls this server for the shared log.
+var corsSuffixes = builder.Configuration.GetSection("Cors:OriginSuffixes").Get<string[]>() ?? [];
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
+    .SetIsOriginAllowed(origin => Uri.TryCreate(origin, UriKind.Absolute, out var u)
+        && u.Scheme == Uri.UriSchemeHttps
+        && corsSuffixes.Any(s => u.Host.EndsWith(s, StringComparison.OrdinalIgnoreCase)))
+    .WithMethods("GET", "POST", "PUT")
+    .WithHeaders("Content-Type", "Authorization")));
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
@@ -25,6 +33,7 @@ builder.Services.AddRateLimiter(o =>
 });
 
 var app = builder.Build();
+app.UseCors();
 app.UseRateLimiter();
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions

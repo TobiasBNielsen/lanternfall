@@ -1,9 +1,10 @@
 'use strict';
 
-// The shared log of deepest dives, kept by the server this page is served from.
+// The shared log of deepest dives, kept by the server at CONFIG.api (this page's own server, or the
+// real one when the game is played on CrazyGames).
 // Each browser is one diver: an id and a secret the server hands out once and the browser keeps.
 const Leaderboard = (() => {
-  const API = 'api/';
+  const API = CONFIG.api;
 
   async function call(method, path, body, auth = true) {
     const ctrl = new AbortController();
