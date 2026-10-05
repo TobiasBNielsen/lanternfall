@@ -31,7 +31,7 @@ jobs:
         env:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          lftp -u "${{ vars.FTP_USER }},$FTP_PASSWORD" "${{ vars.FTP_HOST }}" -e "set ftp:ssl-force true; set ssl:verify-certificate true; cd ${{ vars.FTP_DIR }}; put deploy/app_offline.htm -o app_offline.htm; bye"
+          lftp -u "${{ vars.FTP_USER }},$FTP_PASSWORD" "${{ vars.FTP_HOST }}" -e "set ftp:ssl-force true; set ssl:verify-certificate true; cd ${{ vars.FTP_DIR }}; mkdir -f logs; put deploy/app_offline.htm -o app_offline.htm; bye"
 
       - name: Upload changed files
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -52,3 +52,12 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           lftp -u "${{ vars.FTP_USER }},$FTP_PASSWORD" "${{ vars.FTP_HOST }}" -e "set ftp:ssl-force true; set ssl:verify-certificate true; cd ${{ vars.FTP_DIR }}; rm -f app_offline.htm; bye"
+
+      - name: Startup log (temporary)
+        if: always()
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          curl -s -o /dev/null --resolve lanternfall.bockersoftware.dk:80:94.231.106.196 -A "Mozilla/5.0 Chrome/130" http://lanternfall.bockersoftware.dk/ || true
+          sleep 5
+          lftp -u "${{ vars.FTP_USER }},$FTP_PASSWORD" "${{ vars.FTP_HOST }}" -e "set ftp:ssl-force true; cd ${{ vars.FTP_DIR }}; ls; ls logs; cat logs/*; bye" || true
