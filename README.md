@@ -2,7 +2,7 @@
 
 Notes from a descent. A deep-sea shooter for the browser, drawn like a 1930s cyanotype: paper-white linework on Prussian blue, and a single warm amber for anything that gives off light.
 
-**▶ Play it here: https://tobiasbnielsen.github.io/lanternfall/**
+**▶ Play it here: https://lanternfall.bockersoftware.dk/**
 
 ## How it plays
 
